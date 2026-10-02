@@ -76,8 +76,8 @@ class WeightLayer:
     description: Optional[str] = None
     weights: Dict[str, Dict[int, float]] = field(default_factory=dict)
 
-    def as_numpy(self, vertex_count: int) -> Dict[str, numpy.ndarray]:
-        """Return weight maps as dense numpy arrays."""
+    def as_numpy(self, vertex_count: int, normalize: bool = False) -> Dict[str, numpy.ndarray]:
+        """Return weight maps as dense numpy arrays, optionally normalized."""
         arrays: Dict[str, numpy.ndarray] = {}
         for bone_name, weight_map in self.weights.items():
             array = numpy.zeros(vertex_count, dtype=numpy.float32)
@@ -88,7 +88,21 @@ class WeightLayer:
                     )
                 array[vidx] = value
             arrays[bone_name] = array
+
+        if normalize and arrays:
+            stacked = numpy.stack(list(arrays.values()), axis=0)
+            sums = stacked.sum(axis=0)
+            mask = sums > 1.0
+            if numpy.any(mask):
+                stacked[:, mask] /= sums[mask]
+                for i, bone_name in enumerate(arrays.keys()):
+                    arrays[bone_name] = stacked[i]
+
         return arrays
+
+    def as_normalized_numpy(self, vertex_count: int) -> Dict[str, numpy.ndarray]:
+        """Return weight maps as dense numpy arrays with weight sums capped at 1.0."""
+        return self.as_numpy(vertex_count, normalize=True)
 
 
 @dataclass(slots=True)
@@ -135,6 +149,13 @@ class BaseMesh:
 
     def layer(self, name: str) -> Optional[WeightLayer]:
         return self.weight_layers.get(name)
+
+    def get_normalized_layer_weights(self, layer_name: str) -> Optional[Dict[str, numpy.ndarray]]:
+        """Return normalized evaluation arrays for a named weight layer without modifying raw weights."""
+        weight_layer = self.layer(layer_name)
+        if weight_layer is None:
+            return None
+        return weight_layer.as_normalized_numpy(len(self.vertices))
 
 
 def _parse_metadata(node: Optional[ET.Element]) -> Dict[str, str]:

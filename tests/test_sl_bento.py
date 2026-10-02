@@ -7,7 +7,7 @@ import sys
 # Ensure CharMorph root directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from lib import sl_bento, utils
+from lib import sl_bento, utils, charlib
 from lib.charlib import Character, DataDir
 
 
@@ -92,16 +92,12 @@ class TestSLBento(unittest.TestCase):
         chars_dir = os.path.join(data_dir, "characters")
 
         for char_name in ["mb_female", "mb_male", "antonia", "reom"]:
-            config_path = os.path.join(chars_dir, char_name, "config.yaml")
-            self.assertTrue(os.path.exists(config_path), f"Missing config for {char_name}")
-
-            with open(config_path, "r", encoding="utf-8") as f:
-                conf = utils.load_yaml(f)
-
-            armatures = conf.get("armature", {})
+            char = charlib.library.char_by_name(char_name)
+            self.assertIsNotNone(char, f"Missing character {char_name}")
+            armatures = char.armature
             self.assertIn("sl_bento", armatures, f"sl_bento missing in {char_name} config")
-            self.assertEqual(armatures["sl_bento"]["title"], "Second Life Bento")
-            self.assertEqual(armatures["sl_bento"]["type"], "sl_bento")
+            self.assertEqual(armatures["sl_bento"].title, "Second Life Bento")
+            self.assertEqual(armatures["sl_bento"].type, "sl_bento")
 
     def test_non_sl_armatures_unaffected(self):
         """Verify non-SL armatures remain intact."""
