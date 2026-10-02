@@ -95,13 +95,11 @@ class TestSLBento(unittest.TestCase):
             config_path = os.path.join(chars_dir, char_name, "config.yaml")
             self.assertTrue(os.path.exists(config_path), f"Missing config for {char_name}")
 
-            with open(config_path, "r", encoding="utf-8") as f:
-                conf = utils.load_yaml(f)
-
-            armatures = conf.get("armature", {})
+            char = Character(char_name, DataDir(data_dir))
+            armatures = char.armature
             self.assertIn("sl_bento", armatures, f"sl_bento missing in {char_name} config")
-            self.assertEqual(armatures["sl_bento"]["title"], "Second Life Bento")
-            self.assertEqual(armatures["sl_bento"]["type"], "sl_bento")
+            self.assertEqual(armatures["sl_bento"].title, "Second Life Bento")
+            self.assertEqual(armatures["sl_bento"].type, "sl_bento")
 
     def test_non_sl_armatures_unaffected(self):
         """Verify non-SL armatures remain intact."""
