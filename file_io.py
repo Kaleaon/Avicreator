@@ -32,7 +32,8 @@ class UIProps:
         default="yaml",
         items=[
             ("yaml", "CharMorph (yaml)", ""),
-            ("json", "MB-Lab (json)", "")
+            ("json", "MB-Lab (json)", ""),
+            ("dae", "Collada (.dae)", "Second Life / OpenSim Collada format")
         ])
 
 
@@ -59,6 +60,8 @@ class CHARMORPH_PT_ImportExport(bpy.types.Panel):
             col.operator("charmorph.export_json")
         elif ui.export_format == "yaml":
             col.operator("charmorph.export_yaml")
+        elif ui.export_format == "dae":
+            col.operator("charmorph.export_dae")
         col.operator("charmorph.import")
 
 
@@ -116,6 +119,43 @@ class OpExportYaml(bpy.types.Operator, bpy_extras.io_utils.ExportHelper):
         return {"FINISHED"}
 
 
+class OpExportCollada(bpy.types.Operator, bpy_extras.io_utils.ExportHelper):
+    bl_idname = "charmorph.export_dae"
+    bl_label = "Export Collada (.dae)"
+    bl_description = "Export character mesh and armature to Second Life / OpenSim compatible Collada (.dae) format"
+    filename_ext = ".dae"
+
+    filter_glob: bpy.props.StringProperty(default="*.dae", options={'HIDDEN'})
+
+    @classmethod
+    def poll(cls, _):
+        return bool(mm.morpher)
+
+    def execute(self, context):
+        m = mm.morpher
+        char_obj = m.core.obj if m else None
+        if not char_obj:
+            self.report({'ERROR'}, "No active character object found")
+            return {'CANCELLED'}
+
+        armature_obj = char_obj.find_armature() if hasattr(char_obj, "find_armature") else None
+        if not armature_obj and m:
+            armature_obj = m.rig
+
+        from . import sl_bento
+        if not sl_bento.is_sl_armature_valid(char_obj, armature_obj):
+            self.report({'ERROR'}, "Export failed: Active character mesh must be rigged to a Second Life compatible armature (sl_bento) before Collada export.")
+            return {'CANCELLED'}
+
+        try:
+            sl_bento.export_collada_sl(self.filepath, char_obj, armature_obj)
+            self.report({'INFO'}, f"Successfully exported Collada model to {self.filepath}")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Collada export error: {str(e)}")
+            return {'CANCELLED'}
+
+
 class OpImport(bpy.types.Operator, bpy_extras.io_utils.ImportHelper):
     bl_idname = "charmorph.import"
     bl_label = "Import morphs"
@@ -150,4 +190,4 @@ class OpImport(bpy.types.Operator, bpy_extras.io_utils.ImportHelper):
         return {"FINISHED"}
 
 
-classes = [OpImport, OpExportJson, OpExportYaml, CHARMORPH_PT_ImportExport]
+classes = [OpImport, OpExportJson, OpExportYaml, OpExportCollada, CHARMORPH_PT_ImportExport]

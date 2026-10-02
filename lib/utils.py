@@ -19,7 +19,11 @@
 # Copyright (C) 2021-2022 Michael Vigovsky
 
 import os, time, logging, numpy
-import bpy, mathutils  # pylint: disable=import-error
+try:
+    import bpy, mathutils  # pylint: disable=import-error
+except ImportError:
+    bpy = None
+    mathutils = None
 
 logger = logging.getLogger(__name__)
 

@@ -162,7 +162,14 @@ class ArpRigHandler(RigHandler):
         bpy.ops.object.mode_set(mode="OBJECT")
 
 
-handlers = {"regular": RigHandler}
+class SLBentoRigHandler(RigHandler):
+    def finalize(self, rigger: "Rigger"):
+        from . import sl_bento
+        sl_bento.transfer_sl_weights(self.morpher.core.obj)
+        super().finalize(rigger)
+
+
+handlers = {"regular": RigHandler, "sl_bento": SLBentoRigHandler}
 rig_errors = {}
 if hasattr(bpy.ops, "arp") and "match_to_rig" in dir(bpy.ops.arp):
     handlers["arp"] = ArpRigHandler

@@ -304,7 +304,16 @@ class Morpher:
         if not cls:
             raise rigging.RigException(rigging.rig_errors.get(
                 conf.type, f"Rig type {conf.type} is not supported"))
-        self.rig = utils.import_obj(self.core.char.path(conf.file), conf.obj_name, "ARMATURE")
+        rig_path = self.core.char.path(conf.file) if hasattr(conf, "file") and conf.file else None
+        if rig_path and os.path.exists(rig_path):
+            self.rig = utils.import_obj(rig_path, getattr(conf, "obj_name", "metarig"), "ARMATURE")
+        else:
+            self.rig = None
+
+        if not self.rig and conf.type == "sl_bento":
+            from . import sl_bento
+            self.rig = sl_bento.build_sl_bento_armature()
+
         if not self.rig:
             raise rigging.RigException("Rig import failed")
 
