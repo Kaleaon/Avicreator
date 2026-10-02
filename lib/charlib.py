@@ -20,7 +20,10 @@
 
 import os, json, collections, logging, traceback, numpy
 
-import bpy  # pylint: disable=import-error
+try:
+    import bpy  # pylint: disable=import-error
+except ImportError:
+    bpy = None
 
 from . import morphs, utils, xml_base_mesh
 
@@ -235,7 +238,14 @@ class Character(DataDir):
         return result
 
     def _parse_armature_dict(self, data):
-        return {k: Armature(self, k, v) for k, v in data.items()}
+        res = {k: Armature(self, k, v) for k, v in data.items()}
+        if "sl_bento" not in res:
+            res["sl_bento"] = Armature(self, "sl_bento", {
+                "title": "Second Life Bento",
+                "type": "sl_bento",
+                "description": "Second Life & OpenSim Bento armature with mBones and collision volume bones"
+            })
+        return res
 
 
 AssetFold = collections.namedtuple("AssetFold", ("verts", "faces", "pos", "idx", "weights", "wmorph"))
