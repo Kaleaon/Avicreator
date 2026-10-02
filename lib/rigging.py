@@ -261,6 +261,24 @@ def get_roll_z(get_func, bone):
     return vector
 
 
+DEFAULT_SUPERMESH_BONE_CHAINS = {
+    "tail": ["tail.01", "tail.02", "tail.03", "tail.04"],
+    "ear_L": ["ear.01.L", "ear.02.L"],
+    "ear_R": ["ear.01.R", "ear.02.R"],
+}
+
+DEFAULT_SUPERMESH_BONES = {
+    "tail.01": {"head": (0.0, -0.1, 0.9), "tail": (0.0, -0.25, 0.85), "parent": "pelvis"},
+    "tail.02": {"head": (0.0, -0.25, 0.85), "tail": (0.0, -0.4, 0.75), "parent": "tail.01"},
+    "tail.03": {"head": (0.0, -0.4, 0.75), "tail": (0.0, -0.55, 0.6), "parent": "tail.02"},
+    "tail.04": {"head": (0.0, -0.55, 0.6), "tail": (0.0, -0.7, 0.4), "parent": "tail.03"},
+    "ear.01.L": {"head": (0.1, 0.0, 1.7), "tail": (0.15, 0.0, 1.8), "parent": "head"},
+    "ear.02.L": {"head": (0.15, 0.0, 1.8), "tail": (0.2, 0.0, 1.9), "parent": "ear.01.L"},
+    "ear.01.R": {"head": (-0.1, 0.0, 1.7), "tail": (-0.15, 0.0, 1.8), "parent": "head"},
+    "ear.02.R": {"head": (-0.15, 0.0, 1.8), "tail": (-0.2, 0.0, 1.9), "parent": "ear.01.R"},
+}
+
+
 class Rigger:
     def __init__(self, context):
         self.context = context
@@ -270,6 +288,9 @@ class Rigger:
 
         self.result = True
         self._bones = None
+
+    def get_supermesh_bone_chains(self):
+        return DEFAULT_SUPERMESH_BONE_CHAINS
 
     def joints_from_char(self, char, verts=None):
         self.jdata = utils.get_vg_avg(char, verts)
@@ -339,6 +360,11 @@ class Rigger:
             attr = "tail"
         item = self.jdata.get(f"joint_{bone.name}_{attr}")
         if not item or item[0] < 1e-10:
+            if bone.name in DEFAULT_SUPERMESH_BONES:
+                bdef = DEFAULT_SUPERMESH_BONES[bone.name]
+                vec = bdef.get(attr)
+                if vec:
+                    return Vector(vec)
             return None
         pos = item[1] / item[0]
         offs = self.get_opt(bone, "offs_" + attr)

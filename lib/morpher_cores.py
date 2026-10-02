@@ -424,13 +424,15 @@ class NumpyMorpher(MorpherCore):
         return self.basis
 
     def _do_all_morphs(self):
-        if self.morphed is None:
-            self.morphed = self.get_basis_l1().copy()
+        basis = self.get_basis_l1()
+        if self.morphed is None or len(self.morphed) != len(basis):
+            self.morphed = basis.copy()
         else:
-            self.morphed[:] = self.get_basis_l1()
+            self.morphed[:] = basis
 
         for morph in self.morphs_l2:
-            morph.apply(self.morphed, self.prop_get_clamped(morph.name))
+            val = self.prop_get_clamped(morph.name)
+            morph.apply(self.morphed, val)
 
         for name, morph in self.morphs_combo.items():
             values = [self.prop_get_clamped(morph_name) for morph_name in enum_combo_names(name)]
