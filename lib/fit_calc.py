@@ -101,6 +101,32 @@ class Geometry:
     def bbox(self):
         return self.verts.min(axis=0), self.verts.max(axis=0)
 
+    @utils.lazyproperty
+    def bbox_scale(self):
+        bmin, bmax = self.bbox
+        return float(numpy.linalg.norm(bmax - bmin))
+
+    def get_adaptive_dist_thresh(self, base_thresh=dist_thresh, ref_scale=1.8):
+        scale = max(0.2, min(5.0, self.bbox_scale / ref_scale))
+        return base_thresh * scale
+
+    @utils.lazyproperty
+    def vertex_normals(self):
+        v_normals = numpy.zeros_like(self.verts, dtype=numpy.float64)
+        for f in self.faces:
+            if len(f) < 3:
+                continue
+            v0, v1, v2 = self.verts[f[0]], self.verts[f[1]], self.verts[f[2]]
+            fn = numpy.cross(v1 - v0, v2 - v0)
+            norm = numpy.linalg.norm(fn)
+            if norm > 1e-12:
+                fn /= norm
+                for vi in f:
+                    v_normals[vi] += fn
+        norms = numpy.linalg.norm(v_normals, axis=1, keepdims=True)
+        norms[norms < 1e-12] = 1.0
+        return v_normals / norms
+
 
 def mesh_faces(mesh):
     return [f.vertices for f in mesh.polygons]
@@ -161,27 +187,48 @@ class SoftBinder:
     bindings: list[dict[int, float]]
     dists_asset: list[float]
 
-    def __init__(self, char_geom: Geometry, asset_verts: numpy.ndarray):
+    def __init__(self, char_geom: Geometry, asset_verts: numpy.ndarray, asset_geom: Geometry = None):
         self.char_geom = char_geom
         self.asset_verts = asset_verts
+        self.asset_geom = asset_geom
         self.bindings = []
         self.dists_asset = []
         self.revset = set()
 
     def calc_binding_kd(self):
         kd = self.char_geom.kd
-        for v in self.asset_verts:
+        char_normals = self.char_geom.vertex_normals
+        asset_normals = self.asset_geom.vertex_normals if self.asset_geom is not None else None
+        for i, v in enumerate(self.asset_verts):
             pdata = kd.find_n(v.tolist(), 16)
             dists = [p[2] for p in pdata]
             mindist = min(dists)
             maxdist = max(dists)
+            n_asset = asset_normals[i] if asset_normals is not None and i < len(asset_normals) else None
             if mindist < epsilon2:
                 self.dists_asset.append(-1)
-                self.bindings.append({item[1]: bigval for item in pdata if item[2] < epsilon2})
+                bdict = {}
+                for item in pdata:
+                    if item[2] < epsilon2:
+                        idx = item[1]
+                        gate = 1.0
+                        if n_asset is not None and idx < len(char_normals):
+                            dot = float(numpy.dot(n_asset, char_normals[idx]))
+                            gate = max(0.0, dot)
+                        bdict[idx] = bigval * (gate if gate > 0 else 1e-6)
+                self.bindings.append(bdict)
             else:
                 self.dists_asset.append(mindist)
                 self.revset.update(p[1] for p in pdata)
-                self.bindings.append({idx: (1 - (dist / maxdist)) / (max(dist, epsilon)) for _, idx, dist in pdata})
+                bdict = {}
+                for _, idx, dist in pdata:
+                    weight = (1 - (dist / maxdist)) / (max(dist, epsilon))
+                    if n_asset is not None and idx < len(char_normals):
+                        dot = float(numpy.dot(n_asset, char_normals[idx]))
+                        weight *= max(0.0, dot)
+                    if weight > 0:
+                        bdict[idx] = weight
+                self.bindings.append(bdict)
 
     # calculate binding based on distance from asset vertices to character faces
     def calc_binding_direct(self):
@@ -190,19 +237,30 @@ class SoftBinder:
         verts = self.char_geom.verts
         faces = self.char_geom.faces
         bvh = self.char_geom.bvh
+        char_normals = self.char_geom.vertex_normals
+        asset_normals = self.asset_geom.vertex_normals if self.asset_geom is not None else None
+        adapt_thresh = self.char_geom.get_adaptive_dist_thresh()
+
         for i, (v, bdist, binding) in enumerate(zip(self.asset_verts, self.dists_asset, self.bindings)):
             if bdist < epsilon2:
                 continue
-            bdist *= 0.75
+            bdist = min(bdist * 0.75, adapt_thresh)
+            n_asset = asset_normals[i] if asset_normals is not None and i < len(asset_normals) else None
             for loc, _, idx, fdist in bvh.find_nearest_range(v.tolist(), bdist):
                 face = faces[idx]
                 self.dists_asset[i] = min(self.dists_asset[i], fdist)
                 fdist = (1 - fdist / bdist) / max(fdist, epsilon)
                 for vi, bw in zip(face, mathutils.interpolate.poly_3d_calc(verts[face].tolist(), loc)):
-                    binding[vi] = max(binding.get(vi, 0), bw*fdist)
+                    w = bw * fdist
+                    if n_asset is not None and vi < len(char_normals):
+                        dot = float(numpy.dot(n_asset, char_normals[vi]))
+                        w *= max(0.0, dot)
+                    if w > 0:
+                        binding[vi] = max(binding.get(vi, 0), w)
 
     def calc_binding_reverse(self, asset_geom):
-        dthresh = min(max(self.dists_asset), dist_thresh)
+        adapt_thresh = self.char_geom.get_adaptive_dist_thresh()
+        dthresh = min(max(self.dists_asset), adapt_thresh)
         if dthresh < epsilon2:
             return
         self.char_geom.verts_filter_set(self.revset)
@@ -210,16 +268,25 @@ class SoftBinder:
         verts = asset_geom.verts
         faces = asset_geom.faces
         bvh = asset_geom.bvh
+        char_normals = self.char_geom.vertex_normals
+        asset_normals = asset_geom.vertex_normals
+
         for i in self.revset:
             loc, _, idx, fdist = bvh.find_nearest(cverts[i].tolist(), dthresh)
             if idx is None:
                 continue
             face = faces[idx]
             coeff = (1 - fdist / dthresh) / max(fdist, epsilon2)
+            n_char = char_normals[i] if i < len(char_normals) else None
             for vi, bw in zip(face, mathutils.interpolate.poly_3d_calc(verts[face].tolist(), loc)):
                 if self.dists_asset[vi] > fdist:
                     d = self.bindings[vi]
-                    d[i] = max(d.get(i, 0), bw * coeff)
+                    w = bw * coeff
+                    if n_char is not None and vi < len(asset_normals):
+                        dot = float(numpy.dot(asset_normals[vi], n_char))
+                        w *= max(0.0, dot)
+                    if w > 0:
+                        d[i] = max(d.get(i, 0), w)
 
     def initial_bind(self, t: utils.Timer):
         self.calc_binding_kd()
@@ -234,7 +301,10 @@ class HardBinder(SoftBinder):
         verts = self.char_geom.verts
         faces = self.char_geom.faces
         bvh = self.char_geom.bvh
-        for v in self.asset_verts:
+        char_normals = self.char_geom.vertex_normals
+        asset_normals = self.asset_geom.vertex_normals if self.asset_geom is not None else None
+
+        for i, v in enumerate(self.asset_verts):
             loc, _, idx, fdist = bvh.find_nearest(v.tolist())
             if loc is None:
                 continue
@@ -242,24 +312,40 @@ class HardBinder(SoftBinder):
             self.revset.update(face)
             self.dists_asset.append(fdist)
             fdist = 1 / max(fdist, epsilon)
-            self.bindings.append({vi: bw*fdist
-                for vi, bw in zip(face, mathutils.interpolate.poly_3d_calc(verts[face].tolist(), loc))})
+            n_asset = asset_normals[i] if asset_normals is not None and i < len(asset_normals) else None
+            bdict = {}
+            for vi, bw in zip(face, mathutils.interpolate.poly_3d_calc(verts[face].tolist(), loc)):
+                w = bw * fdist
+                if n_asset is not None and vi < len(char_normals):
+                    dot = float(numpy.dot(n_asset, char_normals[vi]))
+                    w *= max(0.0, dot)
+                bdict[vi] = w
+            self.bindings.append(bdict)
 
     def calc_binding_kd(self):
         kd = self.char_geom.kd
-        for v, fdist, binding in zip(self.asset_verts, self.dists_asset, self.bindings):
+        char_normals = self.char_geom.vertex_normals
+        asset_normals = self.asset_geom.vertex_normals if self.asset_geom is not None else None
+        adapt_thresh = self.char_geom.get_adaptive_dist_thresh()
+
+        for i, (v, fdist, binding) in enumerate(zip(self.asset_verts, self.dists_asset, self.bindings)):
             if fdist < epsilon2:
                 continue
-            fdist = min(fdist * 1.5, fdist + dist_thresh)
+            fdist = min(fdist * 1.5, fdist + adapt_thresh)
             kdata = kd.find_range(v, fdist)
             if len(kdata) < 2:
                 continue
-            if len(kdata)>24:
+            if len(kdata) > 24:
                 kdata = kdata[:24]
             coeff = 2 / (fdist - min([item[2] for item in kdata]))
+            n_asset = asset_normals[i] if asset_normals is not None and i < len(asset_normals) else None
             for _, idx, dist in kdata:
                 self.revset.add(idx)
-                binding[idx] = max(binding.get(idx, 0), (fdist - dist) * coeff / max(dist, epsilon))
+                w = (fdist - dist) * coeff / max(dist, epsilon)
+                if n_asset is not None and idx < len(char_normals):
+                    dot = float(numpy.dot(n_asset, char_normals[idx]))
+                    w *= max(0.0, dot)
+                binding[idx] = max(binding.get(idx, 0), w)
 
     def initial_bind(self, t: utils.Timer):
         self.calc_binding_direct()
@@ -342,7 +428,7 @@ class FitCalculator:
             Binder = HardBinder
         else:
             Binder = SoftBinder
-        b = Binder(self.get_char_geom(afd), asset_verts)
+        b = Binder(self.get_char_geom(afd), asset_verts, asset_geom)
         b.initial_bind(t)
         if asset_geom:
             b.calc_binding_reverse(asset_geom)

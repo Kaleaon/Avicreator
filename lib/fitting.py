@@ -169,6 +169,101 @@ def fit_to_bmesh(bm, afd, fitted_diff):
     return morphed.min(axis=0), morphed.max(axis=0)
 
 
+def build_adjacency_list(faces, num_verts):
+    adj = [set() for _ in range(num_verts)]
+    for f in faces:
+        n = len(f)
+        for i in range(n):
+            v1 = f[i]
+            v2 = f[(i + 1) % n]
+            if v1 < num_verts and v2 < num_verts:
+                adj[v1].add(v2)
+                adj[v2].add(v1)
+    return [numpy.array(list(neighbors), dtype=numpy.int32) if neighbors else numpy.array([], dtype=numpy.int32) for neighbors in adj]
+
+
+def apply_surface_clearance_and_relaxation(
+    verts: numpy.ndarray,
+    asset_faces: list,
+    char_geom: fit_calc.Geometry,
+    masked_body_verts: set = None,
+    min_clearance: float = 0.002,
+    max_relaxation_passes: int = 5
+) -> numpy.ndarray:
+    """
+    Executes post-fitting BVH distance ray-cast check, surface clearance projection,
+    and iterative Laplacian mesh relaxation in memory using NumPy buffer operations.
+    """
+    if len(verts) == 0 or char_geom is None or getattr(char_geom, "bvh", None) is None:
+        return verts
+
+    masked_body_verts = masked_body_verts or set()
+    num_verts = len(verts)
+    adj_list = build_adjacency_list(asset_faces, num_verts)
+    bvh = char_geom.bvh
+    char_faces = char_geom.faces
+
+    # 1. Post-fitting BVH distance & ray-cast clearance check + outward normal projection
+    projected_verts = verts.copy()
+
+    for i in range(num_verts):
+        co = projected_verts[i]
+        res = bvh.find_nearest(co.tolist())
+        if res is None or res[0] is None or res[2] is None:
+            continue
+        loc, normal, face_idx, dist = res[0], res[1], res[2], res[3]
+
+        c_face = char_faces[face_idx]
+        if masked_body_verts and all(vi in masked_body_verts for vi in c_face):
+            continue
+
+        norm = numpy.array(normal, dtype=numpy.float64)
+        norm_len = numpy.linalg.norm(norm)
+        if norm_len > 1e-12:
+            norm /= norm_len
+        else:
+            continue
+
+        v_vec = co - numpy.array(loc, dtype=numpy.float64)
+        signed_dist = float(numpy.dot(v_vec, norm))
+
+        if signed_dist < min_clearance:
+            projected_verts[i] = numpy.array(loc, dtype=numpy.float64) + norm * min_clearance
+
+    # 2. Iterative Laplacian mesh relaxation (capped at max 5 passes)
+    relaxation_passes = min(max_relaxation_passes, 5)
+    curr_verts = projected_verts.copy()
+
+    for _pass in range(relaxation_passes):
+        next_verts = curr_verts.copy()
+        for i in range(num_verts):
+            adj = adj_list[i]
+            if len(adj) == 0:
+                continue
+
+            avg_co = numpy.mean(curr_verts[adj], axis=0)
+            smoothed_co = 0.5 * curr_verts[i] + 0.5 * avg_co
+
+            res = bvh.find_nearest(smoothed_co.tolist())
+            if res is not None and res[0] is not None and res[2] is not None:
+                c_face = char_faces[res[2]]
+                if not (masked_body_verts and all(vi in masked_body_verts for vi in c_face)):
+                    norm = numpy.array(res[1], dtype=numpy.float64)
+                    norm_len = numpy.linalg.norm(norm)
+                    if norm_len > 1e-12:
+                        norm /= norm_len
+                        v_vec = smoothed_co - numpy.array(res[0], dtype=numpy.float64)
+                        signed_dist = float(numpy.dot(v_vec, norm))
+                        if signed_dist < min_clearance:
+                            smoothed_co = numpy.array(res[0], dtype=numpy.float64) + norm * min_clearance
+
+            next_verts[i] = smoothed_co
+
+        curr_verts = next_verts
+
+    return curr_verts
+
+
 class EmptyAsset:
     author = ""
     license = ""
@@ -359,6 +454,21 @@ class Fitter(hair.HairFitter):
         self.tmp_buf = None
         self.transfer_calc = None
 
+    def get_masked_verts(self) -> set:
+        masked = set()
+        if not hasattr(self, "mcore") or not self.mcore or not getattr(self.mcore, "obj", None):
+            return masked
+        obj = self.mcore.obj
+        for vg in getattr(obj, "vertex_groups", []):
+            if vg.name.startswith("cm_mask_"):
+                for v in getattr(getattr(obj, "data", None), "vertices", []):
+                    try:
+                        if vg.weight(v.index) > 0.001:
+                            masked.add(v.index)
+                    except (RuntimeError, AttributeError):
+                        pass
+        return masked
+
     def _get_target(self, asset):
         return utils.get_target(asset) if asset.data is self.mcore.obj.data else get_fitting_shapekey(asset)
 
@@ -375,6 +485,16 @@ class Fitter(hair.HairFitter):
 
         verts = afd.binding.fit(self.get_diff_arr(afd.morph))
         verts += afd.geom.verts
+
+        char_geom = self.get_char_geom(afd)
+        masked_body_verts = self.get_masked_verts()
+        verts = apply_surface_clearance_and_relaxation(
+            verts, afd.geom.faces, char_geom,
+            masked_body_verts=masked_body_verts,
+            min_clearance=0.002,
+            max_relaxation_passes=5
+        )
+
         if self.mcore.alt_topo and afd.obj is self.mcore.obj:
             self.mcore.alt_topo_verts = verts
         self._get_target(afd.obj).foreach_set("co", verts.reshape(-1))

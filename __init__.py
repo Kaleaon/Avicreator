@@ -19,7 +19,10 @@
 # Copyright (C) 2020 Michael Vigovsky
 
 import logging
-import bpy  # pylint: disable=import-error
+try:
+    import bpy  # pylint: disable=import-error
+except ImportError:
+    pass
 
 from . import addon_updater_ops
 from . import common, library, assets, morphing, randomize, file_io, hair, finalize, rig, rigify, pose, prefs, cmedit
