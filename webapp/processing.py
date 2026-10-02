@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 import contextlib
+import functools
 import json
 import logging
 import os
@@ -120,8 +121,14 @@ def _extract_archive(archive_path: Path, destination: Path) -> List[Path]:
     return files
 
 
+@functools.lru_cache(maxsize=1)
 def _load_base_mesh_catalog() -> Dict[str, xml_base_mesh.BaseMesh]:
     return xml_base_mesh.load_dir(str(BASE_MESH_DIRECTORY))
+
+
+def clear_base_mesh_catalog_cache() -> None:
+    """Clear the memoized base mesh catalog cache."""
+    _load_base_mesh_catalog.cache_clear()
 
 
 def _summarise_layer(
