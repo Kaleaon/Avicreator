@@ -22,14 +22,14 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
     val showAnatomicalDetails = settingsRepository.showAnatomicalDetails
-    
+
     fun toggleAnatomicalDetails(show: Boolean) {
         // In a real ViewModel we'd use viewModelScope and interact with repo
         // But since the repo function is suspend, we'd launch it.
         // For simplicity here, we assume the view model exposes a suspend function or the view calls it.
         // Actually, better to launch here.
     }
-    
+
     suspend fun updateAnatomicalDetails(show: Boolean) {
         settingsRepository.setShowAnatomicalDetails(show)
     }
@@ -64,7 +64,7 @@ fun SettingsScreen(
         ) {
             Text("Content Preferences", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -79,7 +79,7 @@ fun SettingsScreen(
                 }
                 Switch(
                     checked = showDetails,
-                    onCheckedChange = { 
+                    onCheckedChange = {
                         scope.launch {
                             viewModel.updateAnatomicalDetails(it)
                         }

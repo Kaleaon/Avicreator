@@ -14,7 +14,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val repository: CharacterRepository
 ) : ViewModel() {
-    
+
     val characters: StateFlow<List<Character>> = repository.allCharacters
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 }

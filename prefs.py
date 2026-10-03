@@ -13,7 +13,7 @@ if "undo_push" in dir(bpy.ops.ed):
 @addon_updater_ops.make_annotations
 class CharMorphPrefs(bpy.types.AddonPreferences):
     bl_idname = __package__
-    
+
     undo_mode: bpy.props.EnumProperty(
         name="Undo mode",
         description="Undo mode",
@@ -63,8 +63,8 @@ class CharMorphPrefs(bpy.types.AddonPreferences):
         self.layout.prop(self, "undo_mode")
         self.layout.prop(self, "adult_mode")
         addon_updater_ops.update_settings_ui(self,context)
-        
-        
+
+
 
 
 def get_prefs():

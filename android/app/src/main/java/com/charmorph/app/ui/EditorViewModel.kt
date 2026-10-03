@@ -42,7 +42,7 @@ class EditorViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val characterId: String = checkNotNull(savedStateHandle["characterId"])
-    
+
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
@@ -57,16 +57,16 @@ class EditorViewModel @Inject constructor(
             val character = repository.getCharacter(characterId)
             if (character != null) {
                 currentCharacter = character
-                
+
                 val activeWeights = character.activeMorphs
                 val morphs = getAvailableMorphs().map { morph ->
                     morph.copy(value = activeWeights[morph.name] ?: morph.value)
                 }
-                
+
                 val bones = character.skeleton.bones.map { bone ->
                     BoneState(bone.id, bone.name)
                 }
-                
+
                 _uiState.value = _uiState.value.copy(morphs = morphs, bones = bones)
             }
         }
@@ -75,11 +75,11 @@ class EditorViewModel @Inject constructor(
     fun setCategory(category: String) {
         _uiState.value = _uiState.value.copy(activeCategory = category)
     }
-    
+
     fun setMode(mode: EditorMode) {
         _uiState.value = _uiState.value.copy(mode = mode)
     }
-    
+
     fun selectTextureSlot(type: TextureType) {
         _uiState.value = _uiState.value.copy(selectedTextureSlot = type)
     }
@@ -93,7 +93,7 @@ class EditorViewModel @Inject constructor(
             saveCurrentState()
         }
     }
-    
+
     fun updateBone(boneId: Int, pitch: Float, yaw: Float, roll: Float) {
         val currentBones = _uiState.value.bones.toMutableList()
         val index = currentBones.indexOfFirst { it.id == boneId }
@@ -102,19 +102,19 @@ class EditorViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(bones = currentBones)
         }
     }
-    
+
     fun getBoneRotation(boneId: Int): Vector4? {
         val bone = _uiState.value.bones.find { it.id == boneId } ?: return null
         return MathUtils.eulerToQuaternion(bone.pitch, bone.yaw, bone.roll)
     }
-    
+
     private fun saveCurrentState() {
         viewModelScope.launch {
             val weights = _uiState.value.morphs.associate { it.name to it.value }
             repository.updateMorphWeights(characterId, weights)
         }
     }
-    
+
     fun getCharacterMesh() = currentCharacter?.baseMesh
     fun getCharacterSkeleton() = currentCharacter?.skeleton
 

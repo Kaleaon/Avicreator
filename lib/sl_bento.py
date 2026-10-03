@@ -214,7 +214,7 @@ def is_sl_armature(obj):
     """
     if not obj:
         return False
-    
+
     bones = set()
     if hasattr(obj, "type") and obj.type == "ARMATURE" and hasattr(obj, "data") and obj.data:
         bones = set(obj.data.bones.keys())
@@ -330,7 +330,7 @@ def generate_collada_dae_xml(filepath, mesh_obj, armature_obj):
     contributor = ET.SubElement(asset, "contributor")
     authoring_tool = ET.SubElement(contributor, "authoring_tool")
     authoring_tool.text = "CharMorph Second Life Collada Exporter"
-    
+
     now_str = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
     created = ET.SubElement(asset, "created")
     created.text = now_str
@@ -382,7 +382,7 @@ def generate_collada_dae_xml(filepath, mesh_obj, armature_obj):
     # 4. Library Visual Scenes
     lib_scenes = ET.SubElement(collada, "library_visual_scenes")
     scene = ET.SubElement(lib_scenes, "visual_scene", {"id": "Scene", "name": "Scene"})
-    
+
     pelvis_node = ET.SubElement(scene, "node", {"id": "mPelvis", "name": "mPelvis", "type": "JOINT"})
     chest_node = ET.SubElement(pelvis_node, "node", {"id": "mChest", "name": "mChest", "type": "JOINT"})
     head_node = ET.SubElement(chest_node, "node", {"id": "mHead", "name": "mHead", "type": "JOINT"})
@@ -431,4 +431,3 @@ def export_collada_sl(filepath, mesh_obj, armature_obj=None):
             logger.warning("bpy.ops.wm.collada_export failed: %s, falling back to direct Collada generator", str(e))
 
     generate_collada_dae_xml(filepath, mesh_obj, armature_obj)
-

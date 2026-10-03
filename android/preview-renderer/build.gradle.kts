@@ -19,7 +19,7 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-    
+
     aaptOptions {
         noCompress("filamat", "ktx")
     }
@@ -28,7 +28,7 @@ android {
 dependencies {
     implementation(project(":core-model"))
     implementation("androidx.core:core-ktx:1.13.1")
-    
+
     // Filament
     val filamentVersion = "1.32.0"
     implementation("com.google.android.filament:filament-android:$filamentVersion")

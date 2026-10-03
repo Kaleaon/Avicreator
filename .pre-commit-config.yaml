@@ -26,10 +26,11 @@ repos:
         language: system
         types: [python]
         exclude: ^lib/yaml/
+        args: ["--fail-under=8.0"]
 
       - id: mypy
         name: mypy
-        entry: mypy
+        entry: bash -c "cd .. && mypy --config-file CharMorphExpansion/.mypy.ini CharMorphExpansion"
         language: system
         types: [python]
-        exclude: ^lib/yaml/
+        pass_filenames: false

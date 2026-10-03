@@ -7,20 +7,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class PhotoToCharacterSolver {
-    
+
     suspend fun solveFromImage(bitmap: Bitmap, baseMesh: Mesh): Resource<Map<String, Float>> = withContext(Dispatchers.Default) {
         try {
             // 1. Detect Landmarks (e.g. ML Kit)
             val landmarks = detectLandmarks(bitmap)
-            
+
             // 2. Map Landmarks to Mesh Indices
             // This mapping would be pre-calculated
-            
+
             // 3. Solve for morph weights
             // Ax = b where A is Morph Deltas, b is Target Positions, x is Weights
             // Minimize ||Ax - b||^2
             val weights = solveWeights(landmarks, baseMesh)
-            
+
             Resource.Success(weights)
         } catch (e: Exception) {
             Resource.Error(e)
