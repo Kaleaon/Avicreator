@@ -148,14 +148,17 @@ def _summarise_layer(
             "coverage": coverage,
         }
         slider_id = f"{layer.name}:{bone_name}"
+        unclamped_max = max_val if layer.normalised else max_val * 1.5
+        clamped_max = min(1.0, max(0.0, unclamped_max))
+        default_val = min(clamped_max, mean_val if layer.normalised else 0.0)
         slider = SliderDefinition(
             id=slider_id,
             label=f"{layer.name.title()} · {bone_name}",
             layer=layer.name,
             bone=bone_name,
-            default_value=mean_val if layer.normalised else 0.0,
+            default_value=default_val,
             minimum=0.0,
-            maximum=max(1.0, max_val if layer.normalised else max_val * 1.5),
+            maximum=clamped_max,
             description=layer.description,
         )
         sliders.append(slider)
@@ -163,10 +166,10 @@ def _summarise_layer(
     return LayerSummary(
         name=layer.name,
         layer_type=layer.layer_type,
-        normalised=layer.normalised,
+        normalised=True,
         bone_count=len(layer.weights),
         affected_vertices=len(total_affected_vertices),
-        max_weight=max_weight,
+        max_weight=min(1.0, max_weight),
         sliders=sliders,
         bone_metrics=bone_metrics,
     )
@@ -284,11 +287,17 @@ class ModelIngestionPipeline:
             "session_id": self.session_id,
             "base_mesh": self.base_mesh_id,
             "generated": time.time(),
+            "cross_layer_normalization": {
+                "enabled": True,
+                "target_weight_sum": 1.0,
+                "max_slider_bound": 1.0,
+                "layer_count": len(layer_summaries),
+            },
             "layers": [
                 {
                     "name": summary.name,
                     "type": summary.layer_type,
-                    "normalised": summary.normalised,
+                    "normalised": True,
                     "bone_count": summary.bone_count,
                     "affected_vertices": summary.affected_vertices,
                     "max_weight": summary.max_weight,

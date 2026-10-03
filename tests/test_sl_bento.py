@@ -7,7 +7,7 @@ import sys
 # Ensure CharMorph root directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from lib import sl_bento, utils
+from lib import sl_bento, utils, charlib
 from lib.charlib import Character, DataDir
 
 

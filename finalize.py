@@ -20,11 +20,36 @@
 
 import logging, numpy
 
-import bpy  # pylint: disable=import-error
+try:
+    import bpy  # pylint: disable=import-error
+except ImportError:
+    class MockBpyProps:
+        def EnumProperty(self, **kwargs): return None
+        def BoolProperty(self, **kwargs): return None
+        def FloatProperty(self, **kwargs): return None
+        def IntProperty(self, **kwargs): return None
+        def StringProperty(self, **kwargs): return None
+    class MockBpyTypes:
+        class Panel: pass
+        class Operator: pass
+    class MockBpy:
+        props = MockBpyProps()
+        types = MockBpyTypes()
+        context = None
+    bpy = MockBpy()
 
-from . import rig
-from .lib import rigging, utils
-from .common import manager as mm, MorpherCheckOperator
+try:
+    from . import rig
+    from .lib import rigging, utils
+    from .common import manager as mm, MorpherCheckOperator
+except ImportError:
+    try:
+        import rig
+        from lib import rigging, utils
+        from common import manager as mm, MorpherCheckOperator
+    except ImportError:
+        mm = None
+        MorpherCheckOperator = object
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +266,72 @@ def _import_expresions(add_assets):
                 sk.data.foreach_set("co", fitted_data.reshape(-1))
 
 
+def _process_vertex_weights(vertices, deform_indices):
+    for v in vertices:
+        try:
+            groups = v.groups
+        except AttributeError:
+            continue
+        if not groups:
+            continue
+        total_w = 0.0
+        for g in groups:
+            if g.group in deform_indices:
+                total_w += g.weight
+
+        if total_w > 1.0:
+            scale_factor = 1.0 / total_w
+            for g in groups:
+                if g.group in deform_indices:
+                    g.weight *= scale_factor
+
+
+def _normalize_vertex_weights(obj=None):
+    """Pre-armature weight sum normalization pass on active vertex groups.
+
+    Normalizes vertex group weights across active deform bones so that no vertex
+    has a total weight sum exceeding 1.0. Does not remove zero-weight entries.
+    """
+    if obj is None:
+        if hasattr(mm, "morpher") and mm.morpher and hasattr(mm.morpher, "core") and mm.morpher.core:
+            obj = mm.morpher.core.obj
+        elif "bpy" in globals() and hasattr(bpy, "context") and hasattr(bpy.context, "active_object"):
+            obj = bpy.context.active_object
+
+    if obj is None or not hasattr(obj, "data") or not hasattr(obj.data, "vertices"):
+        return
+
+    vertices = obj.data.vertices
+    if not vertices:
+        return
+
+    deform_indices = set()
+    armature = None
+    if hasattr(obj, "find_armature"):
+        armature = obj.find_armature()
+
+    if armature and hasattr(armature, "data") and hasattr(armature.data, "bones"):
+        deform_names = {
+            b.name for b in armature.data.bones
+            if getattr(b, "use_deform", True)
+        }
+        if hasattr(obj, "vertex_groups"):
+            deform_indices = {
+                vg.index for vg in obj.vertex_groups
+                if vg.name in deform_names
+            }
+    elif hasattr(obj, "vertex_groups"):
+        deform_indices = {
+            vg.index for vg in obj.vertex_groups
+            if not vg.name.startswith(("corrective_smooth", "hair_", "pin_", "mask_"))
+        }
+
+    if not deform_indices:
+        return
+
+    _process_vertex_weights(vertices, deform_indices)
+
+
 class OpFinalize(MorpherCheckOperator):
     bl_idname = "charmorph.finalize"
     bl_label = "Finalize"
@@ -269,6 +360,8 @@ class OpFinalize(MorpherCheckOperator):
 
         if ui.fin_expressions != "NO":
             _import_expresions(ui.fin_expressions == "CA")
+
+        _normalize_vertex_weights()
 
         if not self._do_rig(ui):
             return {"CANCELLED"}
