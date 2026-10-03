@@ -24,7 +24,10 @@ import bpy  # pylint: disable=import-error
 
 from .charlib import Character
 from . import utils
-import prefs
+try:
+    from .. import prefs
+except (ImportError, ValueError):
+    import prefs
 
 logger = logging.getLogger(__name__)
 
