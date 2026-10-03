@@ -42,7 +42,10 @@ jobs:
         run: pylint --rcfile=.pylintrc $(git ls-files '*.py' | grep -v 'lib/yaml')
 
       - name: Run mypy
-        run: mypy --config-file .mypy.ini .
+        run: |
+          REPO_NAME=$(basename "$GITHUB_WORKSPACE")
+          cd ..
+          mypy --config-file "$REPO_NAME/.mypy.ini" --explicit-package-bases "$REPO_NAME"
 
       - name: Run pyright
         run: pyright

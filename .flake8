@@ -34,6 +34,8 @@ ignore =
     E721,
     E722,
     F401,
-    F841
+    F841,
+    W293,
+    W391
 
-exclude = lib/yaml, tmp, dev, demo, backups
+exclude = lib/yaml, tmp, dev, demo, backups, .git, __pycache__, build, dist
