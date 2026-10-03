@@ -23,7 +23,7 @@ struct MeshContext {
 
     void update(const std::map<int, float>& weights) {
         std::lock_guard<std::mutex> lock(mutex);
-        
+
         // Reset to base
         currentVertices = baseVertices;
 
@@ -46,17 +46,17 @@ struct MeshContext {
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_charmorph_nativebridge_NativeLib_createMesh(
     JNIEnv* env, jobject, jfloatArray vertices) {
-    
+
     MeshContext* ctx = new MeshContext();
-    
+
     jsize len = env->GetArrayLength(vertices);
     jfloat* data = env->GetFloatArrayElements(vertices, 0);
-    
+
     ctx->baseVertices.assign(data, data + len);
     ctx->currentVertices.assign(data, data + len); // Init output
-    
+
     env->ReleaseFloatArrayElements(vertices, data, 0);
-    
+
     return reinterpret_cast<jlong>(ctx);
 }
 
@@ -69,14 +69,14 @@ Java_com_charmorph_nativebridge_NativeLib_destroyMesh(
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_charmorph_nativebridge_NativeLib_addMorphTarget(
-    JNIEnv* env, jobject, 
+    JNIEnv* env, jobject,
     jlong meshPtr, jint morphId, jintArray indices, jfloatArray deltas) {
-    
+
     MeshContext* ctx = reinterpret_cast<MeshContext*>(meshPtr);
     if (!ctx) return;
 
     MorphTarget target;
-    
+
     jsize idxLen = env->GetArrayLength(indices);
     jint* idxData = env->GetIntArrayElements(indices, 0);
     target.indices.assign(idxData, idxData + idxLen);
@@ -95,7 +95,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_charmorph_nativebridge_NativeLib_updateMorphs(
     JNIEnv* env, jobject,
     jlong meshPtr, jintArray morphIds, jfloatArray morphWeights, jobject outputBuffer) {
-    
+
     MeshContext* ctx = reinterpret_cast<MeshContext*>(meshPtr);
     if (!ctx) return;
 
@@ -104,11 +104,11 @@ Java_com_charmorph_nativebridge_NativeLib_updateMorphs(
     jsize count = env->GetArrayLength(morphIds);
     jint* ids = env->GetIntArrayElements(morphIds, 0);
     jfloat* w = env->GetFloatArrayElements(morphWeights, 0);
-    
+
     for(int i=0; i<count; ++i) {
         weightsMap[ids[i]] = w[i];
     }
-    
+
     env->ReleaseIntArrayElements(morphIds, ids, 0);
     env->ReleaseFloatArrayElements(morphWeights, w, 0);
 
@@ -118,7 +118,7 @@ Java_com_charmorph_nativebridge_NativeLib_updateMorphs(
     // Copy to Direct ByteBuffer
     void* bufferAddr = env->GetDirectBufferAddress(outputBuffer);
     jlong bufferCap = env->GetDirectBufferCapacity(outputBuffer);
-    
+
     if (bufferAddr && bufferCap >= ctx->currentVertices.size() * sizeof(float)) {
          memcpy(bufferAddr, ctx->currentVertices.data(), ctx->currentVertices.size() * sizeof(float));
     } else {
@@ -142,9 +142,9 @@ Java_com_charmorph_nativebridge_NativeLib_solveMorphWeights(
         jfloatArray baseVertices,
         jintArray morphIndices,
         jfloatArray morphDeltas) {
-    
+
     // Stub implementation as before
-    int morphCount = 10; 
+    int morphCount = 10;
     std::vector<float> resultWeights(morphCount, 0.5f);
     jfloatArray result = env->NewFloatArray(morphCount);
     env->SetFloatArrayRegion(result, 0, morphCount, resultWeights.data());

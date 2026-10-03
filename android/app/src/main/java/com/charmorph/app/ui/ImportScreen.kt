@@ -37,10 +37,10 @@ fun ImportScreen(
                 delay(1000)
                 progress = 0.5f
                 statusText = "Generating Test Asset..."
-                
+
                 // Actually save a test character to DB
                 viewModel.importTestCharacter()
-                
+
                 delay(500)
                 progress = 1.0f
                 statusText = "Done!"

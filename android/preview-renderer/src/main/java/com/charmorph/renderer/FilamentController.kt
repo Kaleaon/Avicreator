@@ -44,15 +44,15 @@ class FilamentController(
     private var camera: Camera = engine.createCamera(engine.entityManager.create())
     private var swapChain: SwapChain? = null
     private var choreographer: Choreographer = Choreographer.getInstance()
-    
+
     private val entityMap = mutableMapOf<String, Int>()
     private val bufferMap = mutableMapOf<String, Pair<VertexBuffer, IndexBuffer>>()
     private var cameraManipulator: Manipulator? = null
-    
+
     private var nativeMeshPtr: Long = 0
     private val nativeLib = NativeLib()
     private var skeletonRig: SkeletonRig? = null
-    
+
     // Materials
     private var pbrMaterial: Material? = null
     private val materialInstances = mutableMapOf<String, MaterialInstance>()
@@ -65,7 +65,7 @@ class FilamentController(
         setupLighting()
         setupManipulator()
         setupMaterial()
-        
+
         surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
                 swapChain = engine.createSwapChain(holder.surface)
@@ -86,11 +86,11 @@ class FilamentController(
             }
         })
     }
-    
+
     private fun setupMaterial() {
         pbrMaterial = MaterialFactory.createPbrMaterial(engine)
     }
-    
+
     fun loadTexture(uri: Uri, type: TextureType) {
         CoroutineScope(Dispatchers.Main).launch {
             val texture = TextureUtils.loadTextureFromUri(context, engine, uri, type == TextureType.ALBEDO)
@@ -111,7 +111,7 @@ class FilamentController(
             }
         }
     }
-    
+
     private fun updateMaterialParameters() {
         materialInstances.values.forEach { instance ->
             albedoTexture?.let {
@@ -133,7 +133,7 @@ class FilamentController(
             .build(engine, light)
         scene.addEntity(light)
     }
-    
+
     private fun setupManipulator() {
         cameraManipulator = Manipulator.Builder()
             .targetPosition(0.0f, 1.0f, 0.0f)
@@ -156,12 +156,12 @@ class FilamentController(
             flatVertices[i*3+2] = v.z
         }
         nativeMeshPtr = nativeLib.createMesh(flatVertices)
-        
+
         val vertexCount = mesh.vertices.size
         val vertexBufferData = ByteBuffer.allocateDirect(vertexCount * 3 * 4)
             .order(ByteOrder.nativeOrder())
         vertexBufferData.asFloatBuffer().put(flatVertices)
-        
+
         // Flatten UVs for Material support
         val uvData = ByteBuffer.allocateDirect(vertexCount * 2 * 4).order(ByteOrder.nativeOrder())
         mesh.uvs.forEach { uv ->
@@ -169,13 +169,13 @@ class FilamentController(
             uvData.putFloat(1.0f - uv.v) // Flip V if needed for OpenGL/Filament convention
         }
         uvData.flip()
-        
+
         val vbBuilder = VertexBuffer.Builder()
             .bufferCount(2) // 0: Position, 1: UV
             .vertexCount(vertexCount)
             .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
             .attribute(VertexBuffer.VertexAttribute.UV0, 1, VertexBuffer.AttributeType.FLOAT2, 0, 8)
-            
+
         val vb = vbBuilder.build(engine)
         vb.setBufferAt(engine, 0, vertexBufferData)
         vb.setBufferAt(engine, 1, uvData)
@@ -187,10 +187,10 @@ class FilamentController(
                 createEntityForGroup(group.name, group.indices, group.tags, vb, skeletonRig != null)
             }
         }
-        
+
         skeletonRig?.let { updateSkinning(it) }
     }
-    
+
     private fun createEntityForGroup(name: String, indices: List<Int>, tags: List<String>, vb: VertexBuffer, hasSkinning: Boolean) {
         val indexCount = indices.size
         val indexBufferData = ByteBuffer.allocateDirect(indexCount * 4)
@@ -203,7 +203,7 @@ class FilamentController(
             .bufferType(IndexBuffer.Builder.IndexType.UINT)
             .build(engine)
         ib.setBuffer(engine, indexBufferData)
-        
+
         bufferMap[name] = Pair(vb, ib)
 
         // Create Material Instance for this group
@@ -212,7 +212,7 @@ class FilamentController(
             matInstance.setParameter("baseColorFactor", 1.0f, 0.8f, 0.6f, 1.0f) // Default Skin Tone
             matInstance.setParameter("roughnessFactor", 0.4f)
             materialInstances[name] = matInstance
-            
+
             // Apply existing textures
             updateMaterialParameters()
         }
@@ -222,44 +222,44 @@ class FilamentController(
             .boundingBox(com.google.android.filament.Box(-2f, -2f, -2f, 2f, 2f, 2f))
             .geometry(0, RenderableManager.PrimitiveType.TRIANGLES, vb, ib)
             .culling(false)
-            
+
         if (matInstance != null) {
             builder.material(0, matInstance)
         }
-            
+
         if (hasSkinning) {
             builder.skinning(skeletonRig!!.skinningBuffer.size / 16)
         }
-            
+
         builder.build(engine, entity)
-        
+
         scene.addEntity(entity)
         entityMap[name] = entity
     }
-    
+
     fun updateMorphWeights(weights: Map<Int, Float>) {
         if (nativeMeshPtr == 0L || bufferMap.isEmpty()) return
-        
+
         val vertexBuffer = bufferMap.values.first().first
         val vertexCount = vertexBuffer.vertexCount
-        
+
         val outputBuffer = ByteBuffer.allocateDirect(vertexCount * 3 * 4).order(ByteOrder.nativeOrder())
-        
+
         val ids = weights.keys.toIntArray()
         val values = weights.values.toFloatArray()
-        
+
         nativeLib.updateMorphs(nativeMeshPtr, ids, values, outputBuffer)
-        
+
         vertexBuffer.setBufferAt(engine, 0, outputBuffer)
     }
-    
+
     fun updateBoneRotation(boneId: Int, rotation: Vector4) {
         skeletonRig?.let { rig ->
             rig.updateBone(boneId, rotation)
             updateSkinning(rig)
         }
     }
-    
+
     private fun updateSkinning(rig: SkeletonRig) {
         entityMap.values.forEach { entity ->
             val rm = engine.renderableManager
@@ -267,15 +267,15 @@ class FilamentController(
              rm.setBones(instance, rig.skinningBuffer, 0, rig.skinningBuffer.size / 16)
         }
     }
-    
+
     private fun cleanup() {
         if (nativeMeshPtr != 0L) {
             nativeLib.destroyMesh(nativeMeshPtr)
             nativeMeshPtr = 0
         }
-        entityMap.values.forEach { 
+        entityMap.values.forEach {
             scene.removeEntity(it)
-            engine.destroyEntity(it) 
+            engine.destroyEntity(it)
         }
         entityMap.clear()
         materialInstances.values.forEach { engine.destroyMaterialInstance(it) }
@@ -287,13 +287,13 @@ class FilamentController(
         bufferMap.clear()
         skeletonRig = null
     }
-    
+
     fun setGroupVisibility(name: String, visible: Boolean) {
         val entity = entityMap[name] ?: return
         val rm = engine.renderableManager
         val instance = rm.getInstance(entity)
         if (instance != 0) {
-            rm.setLayerMask(instance, 0xff, if (visible) 0xff else 0x00) 
+            rm.setLayerMask(instance, 0xff, if (visible) 0xff else 0x00)
         }
     }
 

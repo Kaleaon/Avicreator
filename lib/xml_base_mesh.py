@@ -389,4 +389,3 @@ def load_dir(path: str) -> Dict[str, BaseMesh]:
         mesh = load_base_mesh(full_path)
         result[mesh.name] = mesh
     return result
-

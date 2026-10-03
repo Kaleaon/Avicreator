@@ -13,7 +13,7 @@ import com.charmorph.feature.photoimport.ui.PhotoImportScreen
 @Composable
 fun CharMorphNavHost() {
     val navController = rememberNavController()
-    
+
     NavHost(navController = navController, startDestination = "home") {
         composable("home") {
             HomeScreen(

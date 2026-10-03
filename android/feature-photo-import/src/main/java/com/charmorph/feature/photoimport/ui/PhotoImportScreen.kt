@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun PhotoImportScreen(onBack: () -> Unit) {
     var status by remember { mutableStateOf("Select a photo to start") }
-    
+
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->

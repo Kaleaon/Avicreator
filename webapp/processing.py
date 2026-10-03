@@ -337,4 +337,3 @@ def persist_upload(files: Iterable[Tuple[str, bytes]], target_dir: Optional[Path
 def available_base_mesh_ids() -> List[str]:
     """Return the list of base mesh identifiers discovered on disk."""
     return sorted(_load_base_mesh_catalog().keys())
-

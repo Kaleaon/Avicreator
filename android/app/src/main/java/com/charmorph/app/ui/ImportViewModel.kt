@@ -44,12 +44,12 @@ class ImportViewModel @Inject constructor(
              }
         }
     }
-    
+
     private suspend fun saveCharacter(mesh: com.charmorph.core.model.Mesh, name: String) {
         val character = Character(
             id = UUID.randomUUID().toString(),
             baseMesh = mesh.copy(name = name),
-            skeleton = Skeleton(emptyList()), 
+            skeleton = Skeleton(emptyList()),
             activeMorphs = mapOf("body_fat" to 0.5f)
         )
         repository.saveCharacter(character)

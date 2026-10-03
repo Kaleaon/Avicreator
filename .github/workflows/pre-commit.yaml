@@ -1,0 +1,26 @@
+name: pre-commit
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install static analysis dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pylint mypy pre-commit
+
+      - name: Run pre-commit checks
+        uses: pre-commit/action@v3.0.1

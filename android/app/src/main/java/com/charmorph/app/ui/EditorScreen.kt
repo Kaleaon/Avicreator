@@ -36,17 +36,17 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val mesh = viewModel.getCharacterMesh()
     val skeleton = viewModel.getCharacterSkeleton()
-    
+
     var filamentView: FilamentView? by remember { mutableStateOf(null) }
-    
+
     val categories = remember(uiState.morphs) {
         uiState.morphs.map { it.category }.distinct().sorted()
     }
-    
+
     val activeMorphs = remember(uiState.morphs, uiState.activeCategory) {
         uiState.morphs.filter { it.category == uiState.activeCategory }
     }
-    
+
     val texturePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -89,7 +89,7 @@ fun EditorScreen(
                             uiState.morphs.forEach { morph ->
                                  view.updateMorphWeight(morph.name, morph.value)
                             }
-                            
+
                             // Apply Pose
                             uiState.bones.forEach { bone ->
                                 val quat = viewModel.getBoneRotation(bone.id)
@@ -163,17 +163,17 @@ fun EditorScreen(
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text("Texture Maps", style = MaterialTheme.typography.titleMedium)
                                 Spacer(modifier = Modifier.height(16.dp))
-                                
-                                Button(onClick = { 
+
+                                Button(onClick = {
                                     viewModel.selectTextureSlot(TextureType.ALBEDO)
-                                    texturePicker.launch("image/*") 
+                                    texturePicker.launch("image/*")
                                 }) {
                                     Text("Load Albedo / Color")
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = { 
+                                Button(onClick = {
                                     viewModel.selectTextureSlot(TextureType.NORMAL)
-                                    texturePicker.launch("image/*") 
+                                    texturePicker.launch("image/*")
                                 }) {
                                     Text("Load Normal Map")
                                 }
@@ -216,7 +216,7 @@ fun BoneControl(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = bone.name, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("X", modifier = Modifier.width(20.dp))
                 Slider(value = bone.pitch, onValueChange = { onUpdate(it, bone.yaw, bone.roll) }, valueRange = -90f..90f, modifier = Modifier.weight(1f))

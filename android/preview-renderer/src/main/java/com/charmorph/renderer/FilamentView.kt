@@ -21,7 +21,7 @@ class FilamentView @JvmOverloads constructor(
     private val currentWeights = mutableMapOf<Int, Float>()
 
     init {
-        Utils.init() 
+        Utils.init()
         controller = FilamentController(context, this)
     }
 
@@ -29,13 +29,13 @@ class FilamentView @JvmOverloads constructor(
         controller?.destroy()
         controller = null
     }
-    
+
     fun loadMesh(mesh: Mesh, skeleton: Skeleton? = null) {
         currentMesh = mesh
         controller?.loadMesh(mesh, skeleton)
         updateVisibility()
     }
-    
+
     fun loadTexture(uri: Uri, type: TextureType) {
         controller?.loadTexture(uri, type)
     }
@@ -46,13 +46,13 @@ class FilamentView @JvmOverloads constructor(
             updateVisibility()
         }
     }
-    
+
     fun updateMorphWeight(targetName: String, weight: Float) {
-        val morphId = targetName.hashCode() 
+        val morphId = targetName.hashCode()
         currentWeights[morphId] = weight
         controller?.updateMorphWeights(currentWeights)
     }
-    
+
     fun updateBoneRotation(boneId: Int, rotation: Vector4) {
         controller?.updateBoneRotation(boneId, rotation)
     }
