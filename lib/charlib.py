@@ -460,6 +460,10 @@ class Library(DataDir):
             logger.error("Charmorph data is not found at %s", self.dirpath)
         self.chars.clear()
         self.base_meshes = xml_base_mesh.load_dir(self.path("base_meshes"))
+        if not self.base_meshes:
+            fallback = os.path.join(os.path.dirname(self.path()), "base_meshes")
+            if os.path.isdir(fallback):
+                self.base_meshes = xml_base_mesh.load_dir(fallback)
         self.hair_colors = self.get_yaml("hair_colors.yaml")
         aliases = self.get_yaml("characters/aliases.yaml")
         self.char_aliases.clear()
