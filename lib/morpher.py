@@ -18,7 +18,7 @@
 #
 # Copyright (C) 2020-2022 Michael Vigovsky
 
-import re, typing, logging
+import os, re, typing, logging
 
 import bpy, mathutils  # pylint: disable=import-error
 
