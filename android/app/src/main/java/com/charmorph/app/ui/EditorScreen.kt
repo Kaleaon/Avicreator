@@ -125,7 +125,7 @@ fun EditorScreen(
                                 selectedTabIndex = categories.indexOf(uiState.activeCategory).coerceAtLeast(0),
                                 edgePadding = 16.dp
                             ) {
-                                categories.forEach { category ->
+                                for (category in categories) {
                                     Tab(
                                         selected = category == uiState.activeCategory,
                                         onClick = { viewModel.setCategory(category) },

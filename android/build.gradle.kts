@@ -6,7 +6,9 @@ plugins {
     kotlin("android") version "1.9.24" apply false
     kotlin("kapt") version "1.9.24" apply false
     kotlin("plugin.serialization") version "1.9.24" apply false
+    id("com.google.dagger.hilt.android") version "2.51.1" apply false
 }
+
 
 tasks.register("clean", Delete::class) {
     delete(rootProject.buildDir)

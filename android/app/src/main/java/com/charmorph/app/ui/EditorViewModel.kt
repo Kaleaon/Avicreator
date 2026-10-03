@@ -15,6 +15,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class MorphState(
+    val name: String,
+    val displayName: String,
+    val category: String,
+    val value: Float = 0f,
+    val min: Float = 0f,
+    val max: Float = 1f
+)
+
 data class BoneState(
     val id: Int,
     val name: String,
