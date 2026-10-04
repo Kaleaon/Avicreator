@@ -215,4 +215,3 @@ def mute_inactive_shape_keys(obj):
             sk.mute = True
         else:
             sk.mute = False
-

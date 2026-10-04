@@ -31,5 +31,3 @@ include(
 
 project(":libs:ktheme-compose").projectDir = file("../../Ktheme/libs/ktheme-compose")
 project(":libs:ktheme-core").projectDir = file("../../Ktheme/libs/ktheme-core")
-
-

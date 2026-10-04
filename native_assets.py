@@ -21,8 +21,12 @@ import uuid
 import logging
 import bpy  # pylint: disable=import-error
 
-from .lib.charlib import library, Asset
-from .assets import get_char, fitter_from_ctx, get_asset_conf
+try:
+    from .lib.charlib import library, Asset
+    from .assets import get_char, fitter_from_ctx, get_asset_conf
+except (ImportError, ValueError):
+    from lib.charlib import library, Asset
+    from assets import get_char, fitter_from_ctx, get_asset_conf
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from lib import sl_bento, utils, charlib
-from lib.charlib import Character, DataDir, library
+from lib.charlib import Character, DataDir
 
 
 class TestSLBento(unittest.TestCase):
@@ -88,16 +88,28 @@ class TestSLBento(unittest.TestCase):
 
     def test_character_configs_contain_sl_bento(self):
         """Verify character config files offer Second Life Bento armature."""
+        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+        chars_dir = os.path.join(data_dir, "characters")
+
         for char_name in ["mb_female", "mb_male", "antonia", "reom"]:
-            char = Character(char_name, library)
-            self.assertIn("sl_bento", char.armature, f"sl_bento missing in {char_name} config")
-            self.assertEqual(char.armature["sl_bento"].title, "Second Life Bento")
-            self.assertEqual(char.armature["sl_bento"].type, "sl_bento")
+            config_path = os.path.join(chars_dir, char_name, "config.yaml")
+            self.assertTrue(os.path.exists(config_path), f"Missing config for {char_name}")
+
+            char = Character(char_name, DataDir(data_dir))
+            armatures = char.armature
+            self.assertIn("sl_bento", armatures, f"sl_bento missing in {char_name} config")
+            self.assertEqual(armatures["sl_bento"].title, "Second Life Bento")
+            self.assertEqual(armatures["sl_bento"].type, "sl_bento")
 
     def test_non_sl_armatures_unaffected(self):
         """Verify non-SL armatures remain intact."""
-        char = Character("mb_female", library)
-        armatures = char.armature
+        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+        config_path = os.path.join(data_dir, "characters", "mb_female", "config.yaml")
+
+        with open(config_path, "r", encoding="utf-8") as f:
+            conf = utils.load_yaml(f)
+
+        armatures = conf.get("armature", {})
         self.assertIn("tweaked", armatures)
         self.assertIn("original", armatures)
         self.assertIn("gaming", armatures)
