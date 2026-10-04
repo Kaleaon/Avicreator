@@ -22,7 +22,7 @@ import os, re, typing, logging
 
 import bpy, mathutils  # pylint: disable=import-error
 
-from . import charlib, morpher_cores, materials, fitting, fit_calc, sliding_joints, rigging, utils
+from . import charlib, morpher_cores, materials, fitting, fit_calc, sliding_joints, rigging, utils, drivers
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +149,8 @@ class Morpher:
         if self.core.error:
             return
         self.core.update()
+        if hasattr(drivers, "mute_inactive_shape_keys"):
+            drivers.mute_inactive_shape_keys(self.core.obj)
         self.fitter.refit_all()
         self.sj_calc.recalc()
         self.update_rig()

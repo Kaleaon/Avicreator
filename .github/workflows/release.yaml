@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Package addon
+        run: |
+          mkdir -p charmorph
+          rsync -av --exclude=".*" --exclude="tests" --exclude="charmorph" . charmorph/
+          zip -r charmorph.zip charmorph
+
+      - name: Generate SHA-256 checksum
+        run: |
+          sha256sum charmorph.zip > SHA256SUMS.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            charmorph.zip
+            SHA256SUMS.txt
+
+  attest-build:
+    needs: build-package
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            charmorph.zip
+            SHA256SUMS.txt
+
+  publish-release:
+    needs: [build-package, attest-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            charmorph.zip
+            SHA256SUMS.txt
+          generate_release_notes: true
