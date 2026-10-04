@@ -39,7 +39,8 @@ data class Mesh(
     val uvs: List<Vector2>,
     val indices: List<Int>,
     val groups: List<MeshGroup> = emptyList(),
-    val skinData: SkinData? = null // Optional skinning data
+    val skinData: SkinData? = null, // Optional skinning data
+    val morphTargets: List<MorphTarget> = emptyList()
 )
 
 @Serializable

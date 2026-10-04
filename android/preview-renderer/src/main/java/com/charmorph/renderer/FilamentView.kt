@@ -30,9 +30,13 @@ class FilamentView @JvmOverloads constructor(
         controller = null
     }
 
-    fun loadMesh(mesh: Mesh, skeleton: Skeleton? = null) {
+    fun loadMesh(
+        mesh: Mesh,
+        skeleton: Skeleton? = null,
+        morphTargets: List<com.charmorph.core.model.MorphTarget> = mesh.morphTargets
+    ) {
         currentMesh = mesh
-        controller?.loadMesh(mesh, skeleton)
+        controller?.loadMesh(mesh, skeleton, morphTargets)
         updateVisibility()
     }
 
