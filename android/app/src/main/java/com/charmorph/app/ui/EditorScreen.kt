@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import io.ktheme.compose.LocalKtheme
 import com.charmorph.renderer.FilamentView
 import com.charmorph.renderer.TextureType
 
@@ -36,6 +37,7 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val mesh = viewModel.getCharacterMesh()
     val skeleton = viewModel.getCharacterSkeleton()
+    val ktheme = LocalKtheme.current
 
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -72,7 +74,7 @@ fun EditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Character Editor") },
+                title = { Text("Character Editor (${ktheme.metadata.name})") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -87,7 +89,7 @@ fun EditorScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(Color.DarkGray)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                  if (mesh != null) {
                      AndroidView(
@@ -139,7 +141,7 @@ fun EditorScreen(
                                 selectedTabIndex = categories.indexOf(uiState.activeCategory).coerceAtLeast(0),
                                 edgePadding = 16.dp
                             ) {
-                                categories.forEach { category ->
+                                for (category in categories) {
                                     Tab(
                                         selected = category == uiState.activeCategory,
                                         onClick = { viewModel.setCategory(category) },

@@ -21,8 +21,12 @@
 import logging, json
 import bpy  # pylint: disable=import-error
 
-from . import prefs
-from .lib import charlib, morpher, morpher_cores
+try:
+    from . import prefs
+    from .lib import charlib, morpher, morpher_cores
+except ImportError:
+    import prefs
+    from lib import charlib, morpher, morpher_cores
 
 logger = logging.getLogger(__name__)
 
