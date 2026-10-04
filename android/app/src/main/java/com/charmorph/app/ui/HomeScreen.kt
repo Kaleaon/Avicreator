@@ -16,7 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.charmorph.core.model.Character
+import com.charmorph.core.model.CharacterMetadata
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,14 +82,14 @@ fun HomeScreen(
 }
 
 @Composable
-fun CharacterListItem(character: Character, onClick: (String) -> Unit) {
+fun CharacterListItem(character: CharacterMetadata, onClick: (String) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick(character.id) }
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(character.baseMesh.name, style = MaterialTheme.typography.titleMedium)
+            Text(character.name, style = MaterialTheme.typography.titleMedium)
             Text("ID: ${character.id.take(8)}", style = MaterialTheme.typography.bodySmall)
         }
     }
