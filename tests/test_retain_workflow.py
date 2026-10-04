@@ -142,7 +142,7 @@ def test_retain_finalization_preserves_shapekeys_and_props():
     obj.data.shape_keys.key_blocks.append(l2_sk)
 
     ui = types.SimpleNamespace(fin_morph="RETAIN")
-    
+
     # Mock manager
     finalize.mm = types.SimpleNamespace(
         morpher=types.SimpleNamespace(
