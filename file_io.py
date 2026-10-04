@@ -21,8 +21,12 @@
 import json
 import bpy, bpy_extras  # pylint: disable=import-error
 
-from .lib import morphs, utils
-from .common import manager as mm
+try:
+    from .lib import morphs, utils
+    from .common import manager as mm
+except ImportError:
+    from lib import morphs, utils
+    from common import manager as mm
 
 
 class UIProps:
@@ -35,6 +39,11 @@ class UIProps:
             ("json", "MB-Lab (json)", ""),
             ("dae", "Collada (.dae)", "Second Life / OpenSim Collada format")
         ])
+    bake_shape_keys: bpy.props.BoolProperty(
+        name="Bake Shape Keys on Export",
+        description="Collapse shape key stack into a single mesh state on export",
+        default=True
+    )
 
 
 class CHARMORPH_PT_ImportExport(bpy.types.Panel):
@@ -54,6 +63,7 @@ class CHARMORPH_PT_ImportExport(bpy.types.Panel):
 
         self.layout.label(text="Export format:")
         self.layout.prop(ui, "export_format", expand=True)
+        self.layout.prop(ui, "bake_shape_keys")
         self.layout.separator()
         col = self.layout.column(align=True)
         if ui.export_format == "json":
@@ -63,6 +73,36 @@ class CHARMORPH_PT_ImportExport(bpy.types.Panel):
         elif ui.export_format == "dae":
             col.operator("charmorph.export_dae")
         col.operator("charmorph.import")
+
+
+def bake_shape_keys_for_export(obj):
+    """Collapse active shape key stack into a single mesh state without altering visual appearance."""
+    if obj is None or getattr(obj, "data", None) is None:
+        return obj
+    data = getattr(obj, "data", None)
+    keys = getattr(data, "shape_keys", None)
+    if keys is None or getattr(keys, "key_blocks", None) is None:
+        return obj
+
+    morphed_co = utils.get_morphed_numpy(obj) if utils and hasattr(utils, "get_morphed_numpy") else None
+    if morphed_co is not None and hasattr(data, "vertices") and len(morphed_co) == len(data.vertices):
+        try:
+            data.vertices.foreach_set("co", morphed_co.reshape(-1))
+        except Exception:
+            pass
+
+    if hasattr(obj, "shape_key_remove"):
+        while keys.key_blocks:
+            sk = keys.key_blocks[0]
+            obj.shape_key_remove(sk)
+            if sk in keys.key_blocks:
+                keys.key_blocks.remove(sk)
+    elif hasattr(keys, "key_blocks"):
+        keys.key_blocks.clear()
+
+    if hasattr(data, "update"):
+        data.update()
+    return obj
 
 
 def morphs_to_data():
@@ -137,6 +177,13 @@ class OpExportCollada(bpy.types.Operator, bpy_extras.io_utils.ExportHelper):
         if not char_obj:
             self.report({'ERROR'}, "No active character object found")
             return {'CANCELLED'}
+
+        ui = getattr(context.window_manager, "charmorph_ui", None)
+        if ui and getattr(ui, "bake_shape_keys", True):
+            bake_shape_keys_for_export(char_obj)
+            if m and hasattr(m, "fitter") and m.fitter:
+                for afd in m.fitter.get_assets():
+                    bake_shape_keys_for_export(afd.obj)
 
         armature_obj = char_obj.find_armature() if hasattr(char_obj, "find_armature") else None
         if not armature_obj and m:
