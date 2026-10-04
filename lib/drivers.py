@@ -156,3 +156,63 @@ def dimport(d: dict, overwrite: bool, **args):
                 fill_driver(fc.driver, drv["driver"])
     finally:
         cm_map.clear()
+
+
+def setup_shapekey_drivers(obj):
+    """Establish live driver links between CharMorph UI properties and shape key weights."""
+    if obj is None or getattr(obj, "data", None) is None:
+        return
+    keys = getattr(obj.data, "shape_keys", None)
+    if keys is None or getattr(keys, "key_blocks", None) is None:
+        return
+
+    for sk in keys.key_blocks:
+        if sk.name.startswith(("L1_", "L2_", "L4_")):
+            parts = sk.name.split("_")
+            prop_name = parts[-1] if len(parts) >= 2 else sk.name
+            pname = f"cmorph_L2_{prop_name}"
+            data_dict = obj.data if isinstance(obj.data, dict) or hasattr(obj.data, "__setitem__") else obj
+            try:
+                if pname not in data_dict:
+                    data_dict[pname] = float(getattr(sk, "value", 0.0))
+            except Exception:
+                pass
+
+            try:
+                if hasattr(sk, "driver_add"):
+                    fcurve = sk.driver_add("value")
+                    drv = getattr(fcurve, "driver", None)
+                    if drv is not None:
+                        drv.type = 'AVERAGE'
+                        if not getattr(drv, "variables", None):
+                            var = drv.variables.new()
+                        else:
+                            var = drv.variables[0]
+                        var.name = "val"
+                        if hasattr(var, "targets") and var.targets:
+                            var.targets[0].id_type = 'OBJECT'
+                            var.targets[0].id = obj
+                            var.targets[0].data_path = f'data["{pname}"]'
+            except Exception:
+                pass
+
+
+def mute_inactive_shape_keys(obj):
+    """Mute inactive shape key evaluation groups to optimize viewport playback performance."""
+    if obj is None or getattr(obj, "data", None) is None:
+        return
+    keys = getattr(obj.data, "shape_keys", None)
+    if keys is None or getattr(keys, "key_blocks", None) is None:
+        return
+
+    ref_key = getattr(keys, "reference_key", None)
+    for sk in keys.key_blocks:
+        if sk is ref_key or getattr(sk, "name", "") == "Basis":
+            sk.mute = False
+            continue
+        val = float(getattr(sk, "value", 0.0))
+        if val == 0.0 or abs(val) < 1e-5:
+            sk.mute = True
+        else:
+            sk.mute = False
+

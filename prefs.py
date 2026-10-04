@@ -1,5 +1,8 @@
 import bpy  # pylint: disable=import-error
-from . import addon_updater_ops
+try:
+    from . import addon_updater_ops
+except ImportError:
+    import addon_updater_ops
 
 undo_modes = [("S", "Simple", "Don't show additional info in undo list")]
 undo_default_mode = "S"
