@@ -2,7 +2,7 @@ package com.charmorph.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.charmorph.core.model.Character
+import com.charmorph.core.model.CharacterMetadata
 import com.charmorph.storage.CharacterRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,6 +15,6 @@ class HomeViewModel @Inject constructor(
     private val repository: CharacterRepository
 ) : ViewModel() {
 
-    val characters: StateFlow<List<Character>> = repository.allCharacters
+    val characters: StateFlow<List<CharacterMetadata>> = repository.allCharacterMetadata
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 }

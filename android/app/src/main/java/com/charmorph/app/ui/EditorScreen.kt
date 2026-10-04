@@ -37,6 +37,20 @@ fun EditorScreen(
     val mesh = viewModel.getCharacterMesh()
     val skeleton = viewModel.getCharacterSkeleton()
 
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE || event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                viewModel.flushPendingWrites()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.flushPendingWrites()
+        }
+    }
+
     var filamentView: FilamentView? by remember { mutableStateOf(null) }
 
     val categories = remember(uiState.morphs) {

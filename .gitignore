@@ -10,3 +10,7 @@ rig
 tmp
 ___test.py
 charmorph_updater/CharMorph_updater_status.json
+build/
+.gradle/
+*.apk
+*.aar
