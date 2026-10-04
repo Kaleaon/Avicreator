@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import androidx.datastore.preferences.core.stringPreferencesKey
+
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 @Singleton
@@ -20,6 +22,7 @@ class SettingsRepository @Inject constructor(
 ) {
     companion object {
         val SHOW_ANATOMICAL_DETAILS = booleanPreferencesKey("show_anatomical_details")
+        val THEME_PRESET_ID = stringPreferencesKey("theme_preset_id")
     }
 
     val showAnatomicalDetails: Flow<Boolean> = context.dataStore.data
@@ -27,9 +30,20 @@ class SettingsRepository @Inject constructor(
             preferences[SHOW_ANATOMICAL_DETAILS] ?: false
         }
 
+    val themePresetId: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[THEME_PRESET_ID] ?: "navy-gold"
+        }
+
     suspend fun setShowAnatomicalDetails(show: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SHOW_ANATOMICAL_DETAILS] = show
+        }
+    }
+
+    suspend fun setThemePresetId(presetId: String) {
+        context.dataStore.edit { preferences ->
+            preferences[THEME_PRESET_ID] = presetId
         }
     }
 }

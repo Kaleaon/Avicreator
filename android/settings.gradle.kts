@@ -25,4 +25,11 @@ include(
     ":storage",
     ":preview-renderer",
     ":feature-photo-import",
+    ":libs:ktheme-compose",
+    ":libs:ktheme-core",
 )
+
+project(":libs:ktheme-compose").projectDir = file("../../Ktheme/libs/ktheme-compose")
+project(":libs:ktheme-core").projectDir = file("../../Ktheme/libs/ktheme-core")
+
+
