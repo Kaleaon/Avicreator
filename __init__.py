@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 from . import addon_updater_ops
-from . import common, library, assets, morphing, randomize, file_io, hair, finalize, rig, rigify, pose, prefs, cmedit
+from . import common, library, assets, morphing, randomize, file_io, hair, finalize, rig, rigify, pose, prefs, cmedit, native_assets
 from .lib import charlib
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ classes: list[type] = [None, prefs.CharMorphPrefs, VIEW3D_PT_CharMorph]
 
 uiprops = [bpy.types.PropertyGroup]
 
-for module in library, morphing, randomize, file_io, assets, hair, rig, rigify, finalize, pose:
+for module in library, morphing, randomize, file_io, assets, hair, rig, rigify, finalize, pose, native_assets:
     classes.extend(module.classes)
     if hasattr(module, "UIProps"):
         uiprops.append(module.UIProps)
@@ -122,12 +122,14 @@ def register():
     bpy.app.handlers.depsgraph_update_post.append(select_handler)
 
     cmedit.register()
+    native_assets.register()
 
 
 def unregister():
     # addon updater unregister
     addon_updater_ops.unregister()
     logger.debug("Charmorph unregister")
+    native_assets.unregister()
     cmedit.unregister()
 
     for hlist in bpy.app.handlers:

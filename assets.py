@@ -59,6 +59,15 @@ def get_assets(ui, _):
         + [("add_" + k, k, '') for k in sorted(library.additional_assets.keys())]
 
 
+def update_fitting_library_dir(ui, context):
+    library.update_additional_assets(ui.fitting_library_dir)
+    from . import native_assets
+    old_path = getattr(ui, "_old_fitting_library_dir", "")
+    new_path = ui.fitting_library_dir
+    native_assets.update_user_asset_library(old_path, new_path)
+    ui._old_fitting_library_dir = new_path
+
+
 class UIProps:
     fitting_char: bpy.props.PointerProperty(
         name="Char",
@@ -116,7 +125,7 @@ class UIProps:
     fitting_library_dir: bpy.props.StringProperty(
         name="Library dir",
         description="Additional library directory",
-        update=lambda ui, _: library.update_additional_assets(ui.fitting_library_dir),
+        update=update_fitting_library_dir,
         subtype='DIR_PATH')
 
 
