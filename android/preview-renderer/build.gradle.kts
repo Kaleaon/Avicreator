@@ -26,6 +26,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":libs:ktheme-core"))
     implementation(project(":core-model"))
     implementation(project(":native-bridge"))
     implementation("androidx.core:core-ktx:1.13.1")
