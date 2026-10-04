@@ -4,24 +4,37 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
-import com.charmorph.storage.entity.CharacterEntity
+import androidx.room.Transaction
+import com.charmorph.storage.entity.CharacterGeometryEntity
+import com.charmorph.storage.entity.CharacterMetadataEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CharacterDao {
-    @Query("SELECT * FROM characters ORDER BY lastModified DESC")
-    fun getAllCharacters(): Flow<List<CharacterEntity>>
+    @Query("SELECT * FROM character_metadata ORDER BY lastModified DESC")
+    fun getAllMetadata(): Flow<List<CharacterMetadataEntity>>
 
-    @Query("SELECT * FROM characters WHERE id = :id")
-    suspend fun getCharacterById(id: String): CharacterEntity?
+    @Query("SELECT * FROM character_metadata WHERE id = :id")
+    suspend fun getMetadataById(id: String): CharacterMetadataEntity?
+
+    @Query("SELECT * FROM character_geometry WHERE characterId = :id")
+    suspend fun getGeometryById(id: String): CharacterGeometryEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertCharacter(character: CharacterEntity)
+    suspend fun insertMetadata(metadata: CharacterMetadataEntity)
 
-    @Update
-    suspend fun updateCharacter(character: CharacterEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGeometry(geometry: CharacterGeometryEntity)
 
-    @Query("DELETE FROM characters WHERE id = :id")
+    @Transaction
+    suspend fun insertCharacter(metadata: CharacterMetadataEntity, geometry: CharacterGeometryEntity) {
+        insertMetadata(metadata)
+        insertGeometry(geometry)
+    }
+
+    @Query("UPDATE character_metadata SET morphWeights = :weights, lastModified = :lastModified WHERE id = :id")
+    suspend fun updateMorphWeights(id: String, weights: Map<String, Float>, lastModified: Long)
+
+    @Query("DELETE FROM character_metadata WHERE id = :id")
     suspend fun deleteCharacter(id: String)
 }

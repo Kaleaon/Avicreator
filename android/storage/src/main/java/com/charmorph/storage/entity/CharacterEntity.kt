@@ -9,6 +9,7 @@ import com.charmorph.core.model.Skeleton
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+// Legacy entity (Database v1) - kept for reference and migration testing
 @Entity(tableName = "characters")
 @TypeConverters(Converters::class)
 data class CharacterEntity(
@@ -16,9 +17,9 @@ data class CharacterEntity(
     val name: String,
     val thumbnailPath: String?,
     val lastModified: Long,
-    val meshData: Mesh, // Serialized
-    val skeletonData: Skeleton, // Serialized
-    val morphWeights: Map<String, Float> // Serialized
+    val meshData: Mesh,
+    val skeletonData: Skeleton,
+    val morphWeights: Map<String, Float>
 )
 
 class Converters {

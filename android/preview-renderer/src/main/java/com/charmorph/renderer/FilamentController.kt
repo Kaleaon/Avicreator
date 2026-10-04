@@ -97,12 +97,12 @@ class FilamentController(
             if (texture != null) {
                 when (type) {
                     TextureType.ALBEDO -> {
-                        engine.destroyTexture(albedoTexture)
+                        albedoTexture?.let { engine.destroyTexture(it) }
                         albedoTexture = texture
                         updateMaterialParameters()
                     }
                     TextureType.NORMAL -> {
-                        engine.destroyTexture(normalTexture)
+                        normalTexture?.let { engine.destroyTexture(it) }
                         normalTexture = texture
                         updateMaterialParameters()
                     }
@@ -264,7 +264,14 @@ class FilamentController(
         entityMap.values.forEach { entity ->
             val rm = engine.renderableManager
             val instance = rm.getInstance(entity)
-             rm.setBones(instance, rig.skinningBuffer, 0, rig.skinningBuffer.size / 16)
+            if (instance != 0) {
+                val floatBuffer = java.nio.ByteBuffer.allocateDirect(rig.skinningBuffer.size * 4)
+                    .order(java.nio.ByteOrder.nativeOrder())
+                    .asFloatBuffer()
+                floatBuffer.put(rig.skinningBuffer)
+                floatBuffer.flip()
+                rm.setBonesAsMatrices(instance, floatBuffer, rig.skinningBuffer.size / 16, 0)
+            }
         }
     }
 

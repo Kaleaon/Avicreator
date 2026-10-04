@@ -9,11 +9,26 @@ import com.charmorph.core.model.Vector4
 import com.charmorph.renderer.TextureType
 import com.charmorph.storage.CharacterRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
+
+data class MorphState(
+    val name: String,
+    val displayName: String,
+    val category: String,
+    val value: Float = 0f,
+    val min: Float = 0f,
+    val max: Float = 1f
+)
 
 data class BoneState(
     val id: Int,
@@ -35,6 +50,7 @@ enum class EditorMode {
     MORPHS, POSE, MATERIALS
 }
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class EditorViewModel @Inject constructor(
     private val repository: CharacterRepository,
@@ -48,8 +64,22 @@ class EditorViewModel @Inject constructor(
 
     private var currentCharacter: Character? = null
 
+    // Debounced flow for database writes during continuous slider drags
+    private val morphWeightFlow = MutableSharedFlow<Map<String, Float>>(
+        replay = 0,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    @Volatile
+    private var hasUnsavedChanges = false
+
+    @Volatile
+    private var pendingWeights: Map<String, Float>? = null
+
     init {
         loadCharacter()
+        observeMorphUpdates()
     }
 
     private fun loadCharacter() {
@@ -72,6 +102,23 @@ class EditorViewModel @Inject constructor(
         }
     }
 
+    private fun observeMorphUpdates() {
+        viewModelScope.launch {
+            morphWeightFlow
+                .debounce(300L)
+                .collect { weights ->
+                    persistMorphWeights(weights)
+                }
+        }
+    }
+
+    private suspend fun persistMorphWeights(weights: Map<String, Float>) {
+        repository.updateMorphWeights(characterId, weights)
+        if (pendingWeights == weights) {
+            hasUnsavedChanges = false
+        }
+    }
+
     fun setCategory(category: String) {
         _uiState.value = _uiState.value.copy(activeCategory = category)
     }
@@ -90,7 +137,11 @@ class EditorViewModel @Inject constructor(
         if (index != -1) {
             currentMorphs[index] = currentMorphs[index].copy(value = value)
             _uiState.value = _uiState.value.copy(morphs = currentMorphs)
-            saveCurrentState()
+
+            val weights = currentMorphs.associate { it.name to it.value }
+            pendingWeights = weights
+            hasUnsavedChanges = true
+            morphWeightFlow.tryEmit(weights)
         }
     }
 
@@ -108,11 +159,19 @@ class EditorViewModel @Inject constructor(
         return MathUtils.eulerToQuaternion(bone.pitch, bone.yaw, bone.roll)
     }
 
-    private fun saveCurrentState() {
-        viewModelScope.launch {
-            val weights = _uiState.value.morphs.associate { it.name to it.value }
-            repository.updateMorphWeights(characterId, weights)
+    fun flushPendingWrites() {
+        if (hasUnsavedChanges) {
+            val weights = pendingWeights ?: _uiState.value.morphs.associate { it.name to it.value }
+            runBlocking(Dispatchers.IO) {
+                repository.updateMorphWeights(characterId, weights)
+            }
+            hasUnsavedChanges = false
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        flushPendingWrites()
     }
 
     fun getCharacterMesh() = currentCharacter?.baseMesh
