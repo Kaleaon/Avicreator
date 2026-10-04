@@ -15,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -91,7 +93,9 @@ fun EditorScreen(
             ) {
                  if (mesh != null) {
                      AndroidView(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .semantics { contentDescription = "3D Character Viewport" },
                         factory = { context ->
                             FilamentView(context).apply {
                                 loadMesh(mesh, skeleton)
@@ -216,7 +220,8 @@ fun MorphSlider(
         Slider(
             value = morph.value,
             onValueChange = onValueChange,
-            valueRange = morph.min..morph.max
+            valueRange = morph.min..morph.max,
+            modifier = Modifier.semantics { contentDescription = morph.displayName }
         )
     }
 }
@@ -233,15 +238,36 @@ fun BoneControl(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("X", modifier = Modifier.width(20.dp))
-                Slider(value = bone.pitch, onValueChange = { onUpdate(it, bone.yaw, bone.roll) }, valueRange = -90f..90f, modifier = Modifier.weight(1f))
+                Slider(
+                    value = bone.pitch,
+                    onValueChange = { onUpdate(it, bone.yaw, bone.roll) },
+                    valueRange = -90f..90f,
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { contentDescription = "${bone.name} X axis pitch" }
+                )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Y", modifier = Modifier.width(20.dp))
-                Slider(value = bone.yaw, onValueChange = { onUpdate(bone.pitch, it, bone.roll) }, valueRange = -90f..90f, modifier = Modifier.weight(1f))
+                Slider(
+                    value = bone.yaw,
+                    onValueChange = { onUpdate(bone.pitch, it, bone.roll) },
+                    valueRange = -90f..90f,
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { contentDescription = "${bone.name} Y axis yaw" }
+                )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Z", modifier = Modifier.width(20.dp))
-                Slider(value = bone.roll, onValueChange = { onUpdate(bone.pitch, bone.yaw, it) }, valueRange = -90f..90f, modifier = Modifier.weight(1f))
+                Slider(
+                    value = bone.roll,
+                    onValueChange = { onUpdate(bone.pitch, bone.yaw, it) },
+                    valueRange = -90f..90f,
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { contentDescription = "${bone.name} Z axis roll" }
+                )
             }
         }
     }
