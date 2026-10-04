@@ -9,7 +9,7 @@ project("charmorph-native")
 add_library(
     charmorph-native
     SHARED
-    src/main/cpp/charmorph_native.cpp
+    charmorph_native.cpp
 )
 
 find_library(
