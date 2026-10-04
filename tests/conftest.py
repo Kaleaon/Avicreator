@@ -49,8 +49,41 @@ if 'bpy' not in sys.modules or not hasattr(sys.modules['bpy'], 'app'):
     ui_mock.fitting_weights_ovr = True
     ui_mock.fitting_mask = "NONE"
     ui_mock.hair_deform = False
+    ui_mock.fitting_library_dir = ""
     wm_mock.charmorph_ui = ui_mock
-    bpy_mock.context = types.SimpleNamespace(window_manager=wm_mock)
+
+    class MockAssetLibrary:
+        def __init__(self, name, path):
+            self.name = name
+            self.path = path
+
+    class MockAssetLibraries(dict):
+        def new(self, name, path=""):
+            lib = MockAssetLibrary(name, path)
+            self[name] = lib
+            return lib
+
+        def remove(self, lib):
+            if hasattr(lib, "name") and lib.name in self:
+                del self[lib.name]
+            elif lib in self.values():
+                for k, v in list(self.items()):
+                    if v == lib:
+                        del self[k]
+
+    prefs_mock = types.SimpleNamespace(
+        filepaths=types.SimpleNamespace(asset_libraries=MockAssetLibraries()),
+        addons={}
+    )
+    bpy_mock.context = types.SimpleNamespace(
+        window_manager=wm_mock,
+        preferences=prefs_mock,
+        mode="OBJECT",
+        active_object=None,
+        object=None,
+        scene=types.SimpleNamespace(cursor=types.SimpleNamespace(location=(0, 0, 0), rotation_euler=(0, 0, 0))),
+        view_layer=types.SimpleNamespace(objects=types.SimpleNamespace(active=None))
+    )
 
     class MockOperator:
         pass

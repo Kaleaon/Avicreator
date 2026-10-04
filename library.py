@@ -36,6 +36,8 @@ class OpReloadLib(bpy.types.Operator):
 
     def execute(self, _):  # pylint: disable=no-self-use
         library.load()
+        from . import native_assets
+        native_assets.register_all_libraries()
         common.manager.recreate_charmorphs()
         return {"FINISHED"}
 
