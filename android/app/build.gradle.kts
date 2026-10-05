@@ -65,6 +65,8 @@ android {
 
 dependencies {
     implementation(project(":libs:ktheme-compose"))
+    implementation(project(":libs:ktheme-core"))
+
     implementation(project(":core-model"))
     implementation(project(":asset-base"))
     implementation(project(":ingest-pipeline"))
