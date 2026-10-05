@@ -246,8 +246,8 @@ class OpDropAssetHandler(bpy.types.Operator):
 
         if asset_name:
             asset_data = library.additional_assets.get(asset_name)
-            if not asset_data and hasattr(char, "assets"):
-                asset_data = char.assets.get(asset_name)
+            if not asset_data and hasattr(char_obj, "assets"):
+                asset_data = char_obj.assets.get(asset_name)
             if asset_data and fitter_from_ctx(context).fit_import((asset_data,)):
                 self.report({'INFO'}, f"Successfully fitted asset '{asset_name}'")
                 return {"FINISHED"}

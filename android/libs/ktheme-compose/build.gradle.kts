@@ -34,4 +34,3 @@ dependencies {
     implementation("androidx.compose.runtime:runtime:1.6.8")
     implementation("androidx.compose.ui:ui:1.6.8")
 }
-
