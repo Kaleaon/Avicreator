@@ -4,7 +4,10 @@ import types
 import bpy
 from pathlib import Path
 
-from CharMorphExpansion import native_assets
+try:
+    import native_assets
+except ImportError:
+    from CharMorphExpansion import native_assets
 
 
 class TestNativeAssetBrowser(unittest.TestCase):
