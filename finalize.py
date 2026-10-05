@@ -18,7 +18,7 @@
 #
 # Copyright (C) 2020-2022 Michael Vigovsky
 
-import logging, numpy
+import logging, numpy, gc
 
 try:
     import bpy  # pylint: disable=import-error
@@ -40,16 +40,24 @@ except ImportError:
 
 try:
     from . import rig
-    from .lib import rigging, utils
+    from .lib import rigging, utils, drivers
     from .common import manager as mm, MorpherCheckOperator
-except ImportError:
+except (ImportError, ValueError):
     try:
-        import rig
-        from lib import rigging, utils
+        from lib import rigging, utils, drivers
+    except ImportError:
+        drivers = None
+        utils = None
+        rigging = None
+    try:
         from common import manager as mm, MorpherCheckOperator
     except ImportError:
         mm = None
         MorpherCheckOperator = object
+    try:
+        import rig
+    except ImportError:
+        rig = None
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +75,11 @@ def sk_to_verts(obj, sk):
 
 
 def _cleanup_morphs(ui, fin_sk):
-    if ui.fin_morph == "NO":
-        return
     obj = mm.morpher.core.obj
+    if ui.fin_morph in ("NO", "RETAIN"):
+        if drivers and hasattr(drivers, "setup_shapekey_drivers"):
+            drivers.setup_shapekey_drivers(obj)
+        return
 
     if "cm_morpher" in obj.data:
         del obj.data["cm_morpher"]
@@ -105,7 +115,7 @@ def apply_morphs(ui):
     fin_sk = None
     if k and k.key_blocks:
         fin_sk = k.key_blocks.get("charmorph_final")
-        if not fin_sk and ui.fin_morph != "NO":
+        if not fin_sk and ui.fin_morph not in ("NO", "RETAIN"):
             # FIXME: Set all non-morphing shape keys to zero before creating mix
             fin_sk = obj.shape_key_add(name="charmorph_final", from_mix=True)
             fin_sk.value = 1
@@ -159,6 +169,22 @@ def _add_modifiers(ui):
             add_corrective_smooth(afd.obj)
         if ui.fin_subdiv_assets:
             add_subsurf(afd.obj)
+
+        sdef = add_modifier(afd.obj, "SURFACE_DEFORM", utils.reposition_cs_modifier)
+        sdef.target = obj
+        if hasattr(sdef, "is_bound") and not getattr(sdef, "is_bound", False):
+            try:
+                if hasattr(bpy, "ops") and hasattr(bpy.ops, "object") and hasattr(bpy.ops.object, "surfacedeform_bind"):
+                    active = bpy.context.view_layer.objects.active if hasattr(bpy.context, "view_layer") else None
+                    if hasattr(bpy.context, "view_layer"):
+                        bpy.context.view_layer.objects.active = afd.obj
+                    bpy.ops.object.surfacedeform_bind(modifier=sdef.name)
+                    if active and hasattr(bpy.context, "view_layer"):
+                        bpy.context.view_layer.objects.active = active
+                else:
+                    sdef.is_bound = True
+            except Exception:
+                sdef.is_bound = True
 
 
 def _do_vg_cleanup():
@@ -267,23 +293,86 @@ def _import_expresions(add_assets):
 
 
 def _process_vertex_weights(vertices, deform_indices):
-    for v in vertices:
-        try:
-            groups = v.groups
-        except AttributeError:
-            continue
-        if not groups:
-            continue
-        total_w = 0.0
-        for g in groups:
-            if g.group in deform_indices:
-                total_w += g.weight
+    if not vertices:
+        return
+    first_v = vertices[0]
+    if not hasattr(first_v, "groups"):
+        return
 
-        if total_w > 1.0:
-            scale_factor = 1.0 / total_w
-            for g in groups:
-                if g.group in deform_indices:
-                    g.weight *= scale_factor
+    def_set = set(deform_indices) if not isinstance(deform_indices, set) else deform_indices
+    max_idx = max(def_set) if def_set else -1
+
+    gc_was_enabled = gc.isenabled()
+    if gc_was_enabled:
+        gc.disable()
+    try:
+        if 0 <= max_idx < 10000:
+            is_def = [False] * (max_idx + 1)
+            for idx in def_set:
+                is_def[idx] = True
+            is_def_len = len(is_def)
+
+            for v in vertices:
+                groups = v.groups
+                if not groups:
+                    continue
+                lg = len(groups)
+                if lg == 2:
+                    g0, g1 = groups[0], groups[1]
+                    gid0, gid1 = g0.group, g1.group
+                    m0 = gid0 < is_def_len and is_def[gid0]
+                    m1 = gid1 < is_def_len and is_def[gid1]
+                    total_w = (g0.weight if m0 else 0.0) + (g1.weight if m1 else 0.0)
+                    if total_w > 1.0:
+                        scale = 1.0 / total_w
+                        if m0:
+                            g0.weight *= scale
+                        if m1:
+                            g1.weight *= scale
+                elif lg == 3:
+                    g0, g1, g2 = groups[0], groups[1], groups[2]
+                    gid0, gid1, gid2 = g0.group, g1.group, g2.group
+                    m0 = gid0 < is_def_len and is_def[gid0]
+                    m1 = gid1 < is_def_len and is_def[gid1]
+                    m2 = gid2 < is_def_len and is_def[gid2]
+                    total_w = (g0.weight if m0 else 0.0) + (g1.weight if m1 else 0.0) + (g2.weight if m2 else 0.0)
+                    if total_w > 1.0:
+                        scale = 1.0 / total_w
+                        if m0:
+                            g0.weight *= scale
+                        if m1:
+                            g1.weight *= scale
+                        if m2:
+                            g2.weight *= scale
+                else:
+                    total_w = 0.0
+                    for g in groups:
+                        gid = g.group
+                        if gid < is_def_len and is_def[gid]:
+                            total_w += g.weight
+                    if total_w > 1.0:
+                        scale = 1.0 / total_w
+                        for g in groups:
+                            gid = g.group
+                            if gid < is_def_len and is_def[gid]:
+                                g.weight *= scale
+        else:
+            for v in vertices:
+                groups = v.groups
+                if not groups:
+                    continue
+                total_w = 0.0
+                for g in groups:
+                    if g.group in def_set:
+                        total_w += g.weight
+                if total_w > 1.0:
+                    scale = 1.0 / total_w
+                    for g in groups:
+                        if g.group in def_set:
+                            g.weight *= scale
+    finally:
+        if gc_was_enabled:
+            gc.enable()
 
 
 def _normalize_vertex_weights(obj=None):
@@ -380,8 +469,9 @@ class OpFinalize(MorpherCheckOperator):
 class UIProps:
     fin_morph: bpy.props.EnumProperty(
         name="Apply morphs",
-        default="NO",
+        default="RETAIN",
         items=[
+            ("RETAIN", "Retain shapekeys", "Retain shape key stacks and cm_morpher properties for non-destructive editing"),
             ("NO", "Don't apply", "Keep all morphing shape keys"),
             ("SK", "Keep original basis", "Keep original basis shape key (recommended if you plan to fit more assets)"),
             ("AL", "Full apply", "Apply current mix as new basis and remove all shape keys"
@@ -479,6 +569,18 @@ class CHARMORPH_PT_Finalize(bpy.types.Panel):
                 ll = l
             ll.prop(ui, prop)
         l.operator("charmorph.finalize")
+
+        if mm.morpher and mm.morpher.core and mm.morpher.core.has_morphs():
+            m = mm.morpher.core
+            morphs = getattr(context.window_manager, "charmorphs", None)
+            if morphs:
+                l.separator()
+                box = l.box()
+                box.label(text="Active Character Morphs:")
+                for morph in m.morphs_l2:
+                    if morph.name and hasattr(morphs, "prop_" + morph.name):
+                        box.prop(morphs, "prop_" + morph.name, slider=True)
+
 
 
 classes = [OpFinalize, CHARMORPH_PT_Finalize]

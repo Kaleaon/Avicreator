@@ -157,11 +157,13 @@ class UIProps:
         items=lambda _ui, _: manager.morpher.presets_list,
         description="Choose morphing preset",
         update=lambda ui, _: manager.morpher.apply_morph_data(
-            manager.morpher.presets.get(ui.morph_preset), ui.morph_preset_mix))
-    morph_preset_mix: bpy.props.BoolProperty(
-        name="Mix with current",
-        description="Mix selected preset with current morphs",
-        default=False)
+            manager.morpher.presets.get(ui.morph_preset), ui.morph_preset_mix_factor))
+    morph_preset_mix_factor: bpy.props.FloatProperty(
+        name="Mix factor",
+        description="Mix factor for blending selected preset with current morphs",
+        default=1.0,
+        min=0.0,
+        max=1.0)
     alt_topo_build_type: bpy.props.EnumProperty(
         name="Alt topo type",
         description="Type of alt topo to build",
@@ -241,7 +243,7 @@ class CHARMORPH_PT_Morphing(bpy.types.Panel):
 
         col = self.layout.column(align=True)
         col.prop(ui, "morph_preset")
-        col.prop(ui, "morph_preset_mix")
+        col.prop(ui, "morph_preset_mix_factor", slider=True)
 
         col.separator()
 

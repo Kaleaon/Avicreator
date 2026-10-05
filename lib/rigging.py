@@ -67,14 +67,11 @@ def attach_rig(morpher, rig):
         mod2.object = rig
         if "preserve_volume_inv" in obj.vertex_groups:
             mod2.vertex_group = "preserve_volume_inv"
+            mod2.invert_vertex_group = True
         else:
             mod2.vertex_group = "preserve_volume"
-            mod2.invert_vertex_group = True
+            mod2.invert_vertex_group = False
         utils.reposition_armature_modifier(obj)
-        ver = bpy.app.version
-        if ver[0] > 3 or (ver[0] == 3 and ver[1] >= 5):
-            # Multi-modifier behavior changed in Blender 3.5
-            mod2.invert_vertex_group = not mod2.invert_vertex_group
 
     else:
         mod.use_deform_preserve_volume = True
@@ -528,16 +525,9 @@ def find_constraint(bone, rig, typ, target):
 
 
 def set_bone_layers(rig, bone, val: str):
-    is_collections = hasattr(bone, "collections")
-    legacy_layers = [False] * 32
     for item in val.split(","):
         parts = item.split(":", 2)
-        if is_collections:
-            rig.collections[parts[1]].assign(bone)
-        else:
-            legacy_layers[int(parts[0])] = True
-    if not is_collections:
-        bone.layers = legacy_layers
+        rig.collections[parts[1]].assign(bone)
 
 
 def calc_vector(vec, bone):

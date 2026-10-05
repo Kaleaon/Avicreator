@@ -2,11 +2,13 @@ package com.charmorph.renderer
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
 import com.charmorph.core.model.Skeleton
+import io.ktheme.engine.HexColor
+import io.ktheme.model.Theme
+import io.ktheme.presets.Presets
 
 class SkeletonVisualizer @JvmOverloads constructor(
     context: Context,
@@ -15,17 +17,35 @@ class SkeletonVisualizer @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     private var skeleton: Skeleton? = null
+    private var activeTheme: Theme = Presets.load("navy-gold")
 
     private val bonePaint = Paint().apply {
-        color = Color.GREEN
         strokeWidth = 5f
         isAntiAlias = true
     }
 
     private val jointPaint = Paint().apply {
-        color = Color.RED
         style = Paint.Style.FILL
         isAntiAlias = true
+    }
+
+    init {
+        updatePaintColors()
+    }
+
+    fun applyTheme(theme: Theme) {
+        this.activeTheme = theme
+        updatePaintColors()
+        invalidate()
+    }
+
+    private fun updatePaintColors() {
+        val semantic = activeTheme.colorScheme.semanticRoles
+        val boneHex = semantic?.success ?: activeTheme.colorScheme.secondary
+        val jointHex = semantic?.critical ?: activeTheme.colorScheme.error
+
+        bonePaint.color = HexColor.parseArgb(boneHex).toInt()
+        jointPaint.color = HexColor.parseArgb(jointHex).toInt()
     }
 
     fun setSkeleton(skeleton: Skeleton?) {
