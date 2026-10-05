@@ -18,7 +18,7 @@
 #
 # Copyright (C) 2020-2022 Michael Vigovsky
 
-import logging, numpy
+import logging, numpy, gc
 
 try:
     import bpy  # pylint: disable=import-error
@@ -300,21 +300,79 @@ def _process_vertex_weights(vertices, deform_indices):
         return
 
     def_set = set(deform_indices) if not isinstance(deform_indices, set) else deform_indices
+    max_idx = max(def_set) if def_set else -1
 
-    for v in vertices:
-        groups = v.groups
-        if not groups:
-            continue
-        total_w = 0.0
-        deform_groups = []
-        for g in groups:
-            if g.group in def_set:
-                total_w += g.weight
-                deform_groups.append(g)
-        if total_w > 1.0:
-            scale_factor = 1.0 / total_w
-            for g in deform_groups:
-                g.weight *= scale_factor
+    gc_was_enabled = gc.isenabled()
+    if gc_was_enabled:
+        gc.disable()
+    try:
+        if 0 <= max_idx < 10000:
+            is_def = [False] * (max_idx + 1)
+            for idx in def_set:
+                is_def[idx] = True
+            is_def_len = len(is_def)
+
+            for v in vertices:
+                groups = v.groups
+                if not groups:
+                    continue
+                lg = len(groups)
+                if lg == 2:
+                    g0, g1 = groups[0], groups[1]
+                    gid0, gid1 = g0.group, g1.group
+                    m0 = gid0 < is_def_len and is_def[gid0]
+                    m1 = gid1 < is_def_len and is_def[gid1]
+                    total_w = (g0.weight if m0 else 0.0) + (g1.weight if m1 else 0.0)
+                    if total_w > 1.0:
+                        scale = 1.0 / total_w
+                        if m0:
+                            g0.weight *= scale
+                        if m1:
+                            g1.weight *= scale
+                elif lg == 3:
+                    g0, g1, g2 = groups[0], groups[1], groups[2]
+                    gid0, gid1, gid2 = g0.group, g1.group, g2.group
+                    m0 = gid0 < is_def_len and is_def[gid0]
+                    m1 = gid1 < is_def_len and is_def[gid1]
+                    m2 = gid2 < is_def_len and is_def[gid2]
+                    total_w = (g0.weight if m0 else 0.0) + (g1.weight if m1 else 0.0) + (g2.weight if m2 else 0.0)
+                    if total_w > 1.0:
+                        scale = 1.0 / total_w
+                        if m0:
+                            g0.weight *= scale
+                        if m1:
+                            g1.weight *= scale
+                        if m2:
+                            g2.weight *= scale
+                else:
+                    total_w = 0.0
+                    for g in groups:
+                        gid = g.group
+                        if gid < is_def_len and is_def[gid]:
+                            total_w += g.weight
+                    if total_w > 1.0:
+                        scale = 1.0 / total_w
+                        for g in groups:
+                            gid = g.group
+                            if gid < is_def_len and is_def[gid]:
+                                g.weight *= scale
+        else:
+            for v in vertices:
+                groups = v.groups
+                if not groups:
+                    continue
+                total_w = 0.0
+                for g in groups:
+                    if g.group in def_set:
+                        total_w += g.weight
+                if total_w > 1.0:
+                    scale = 1.0 / total_w
+                    for g in groups:
+                        if g.group in def_set:
+                            g.weight *= scale
+    finally:
+        if gc_was_enabled:
+            gc.enable()
 
 
 def _normalize_vertex_weights(obj=None):
