@@ -6,6 +6,7 @@ import android.view.Choreographer
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import com.charmorph.core.model.Mesh
+import com.charmorph.core.model.MorphTarget
 import com.charmorph.core.model.Skeleton
 import com.charmorph.core.model.Vector4
 import com.charmorph.nativebridge.NativeLib
@@ -16,6 +17,7 @@ import com.google.android.filament.IndexBuffer
 import com.google.android.filament.LightManager
 import com.google.android.filament.Material
 import com.google.android.filament.MaterialInstance
+import com.google.android.filament.MorphTargetBuffer
 import com.google.android.filament.RenderableManager
 import com.google.android.filament.Renderer
 import com.google.android.filament.Scene
@@ -52,6 +54,16 @@ class FilamentController(
     private var nativeMeshPtr: Long = 0
     private val nativeLib = NativeLib()
     private var skeletonRig: SkeletonRig? = null
+
+    // Morph Target Buffers
+    private var morphTargetBuffer: MorphTargetBuffer? = null
+    private val morphNameToIndex = mutableMapOf<String, Int>()
+    private val morphIdToIndex = mutableMapOf<Int, Int>()
+    private var activeMorphTargetCount = 0
+
+    companion object {
+        const val MAX_MORPH_TARGETS = 8
+    }
 
     // Materials
     private var pbrMaterial: Material? = null
@@ -140,7 +152,7 @@ class FilamentController(
             .build(Manipulator.Mode.ORBIT)
     }
 
-    fun loadMesh(mesh: Mesh, skeleton: Skeleton? = null) {
+    fun loadMesh(mesh: Mesh, skeleton: Skeleton? = null, morphTargets: List<MorphTarget> = mesh.morphTargets) {
         cleanup()
 
         if (skeleton != null) {
@@ -170,11 +182,54 @@ class FilamentController(
         }
         uvData.flip()
 
+        val targetsToLoad = if (morphTargets.isNotEmpty()) morphTargets else mesh.morphTargets
+        val targetCount = targetsToLoad.size.coerceAtMost(MAX_MORPH_TARGETS)
+        activeMorphTargetCount = targetCount
+
+        if (targetCount > 0) {
+            val mtb = MorphTargetBuffer.Builder()
+                .count(targetCount)
+                .vertexCount(vertexCount)
+                .build(engine)
+
+            for (i in 0 until targetCount) {
+                val target = targetsToLoad[i]
+                morphNameToIndex[target.name] = i
+                morphIdToIndex[target.name.hashCode()] = i
+                morphIdToIndex[i] = i
+
+                val deltas = FloatArray(vertexCount * 3)
+                target.deltas.forEach { (vIdx, delta) ->
+                    if (vIdx in 0 until vertexCount) {
+                        deltas[vIdx * 3] = delta.x
+                        deltas[vIdx * 3 + 1] = delta.y
+                        deltas[vIdx * 3 + 2] = delta.z
+                    }
+                }
+                mtb.setPositionsAt(engine, i, deltas, 0)
+
+                val indices = target.deltas.keys.toIntArray()
+                val floatDeltas = FloatArray(indices.size * 3)
+                indices.forEachIndexed { idx, vIdx ->
+                    val d = target.deltas[vIdx] ?: com.charmorph.core.model.Vector3(0f, 0f, 0f)
+                    floatDeltas[idx * 3] = d.x
+                    floatDeltas[idx * 3 + 1] = d.y
+                    floatDeltas[idx * 3 + 2] = d.z
+                }
+                nativeLib.addMorphTarget(nativeMeshPtr, target.name.hashCode(), indices, floatDeltas)
+            }
+            morphTargetBuffer = mtb
+        }
+
         val vbBuilder = VertexBuffer.Builder()
             .bufferCount(2) // 0: Position, 1: UV
             .vertexCount(vertexCount)
             .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
             .attribute(VertexBuffer.VertexAttribute.UV0, 1, VertexBuffer.AttributeType.FLOAT2, 0, 8)
+
+        if (targetCount > 0) {
+            vbBuilder.morphTargetCount(targetCount)
+        }
 
         val vb = vbBuilder.build(engine)
         vb.setBufferAt(engine, 0, vertexBufferData)
@@ -231,6 +286,10 @@ class FilamentController(
             builder.skinning(skeletonRig!!.skinningBuffer.size / 16)
         }
 
+        morphTargetBuffer?.let { mtb ->
+            builder.morphTargetBuffer(0, mtb)
+        }
+
         builder.build(engine, entity)
 
         scene.addEntity(entity)
@@ -238,19 +297,43 @@ class FilamentController(
     }
 
     fun updateMorphWeights(weights: Map<Int, Float>) {
-        if (nativeMeshPtr == 0L || bufferMap.isEmpty()) return
+        if (activeMorphTargetCount == 0) return
 
-        val vertexBuffer = bufferMap.values.first().first
-        val vertexCount = vertexBuffer.vertexCount
+        val weightArray = FloatArray(activeMorphTargetCount)
+        weights.forEach { (key, value) ->
+            val targetIdx = morphIdToIndex[key]
+            if (targetIdx != null && targetIdx < activeMorphTargetCount) {
+                weightArray[targetIdx] = value
+            }
+        }
 
-        val outputBuffer = ByteBuffer.allocateDirect(vertexCount * 3 * 4).order(ByteOrder.nativeOrder())
+        entityMap.values.forEach { entity ->
+            val rm = engine.renderableManager
+            val instance = rm.getInstance(entity)
+            if (instance != 0) {
+                rm.setMorphWeights(instance, weightArray, 0)
+            }
+        }
+    }
 
-        val ids = weights.keys.toIntArray()
-        val values = weights.values.toFloatArray()
+    fun updateMorphWeightsByName(weights: Map<String, Float>) {
+        if (activeMorphTargetCount == 0) return
 
-        nativeLib.updateMorphs(nativeMeshPtr, ids, values, outputBuffer)
+        val weightArray = FloatArray(activeMorphTargetCount)
+        weights.forEach { (name, value) ->
+            val targetIdx = morphNameToIndex[name]
+            if (targetIdx != null && targetIdx < activeMorphTargetCount) {
+                weightArray[targetIdx] = value
+            }
+        }
 
-        vertexBuffer.setBufferAt(engine, 0, outputBuffer)
+        entityMap.values.forEach { entity ->
+            val rm = engine.renderableManager
+            val instance = rm.getInstance(entity)
+            if (instance != 0) {
+                rm.setMorphWeights(instance, weightArray, 0)
+            }
+        }
     }
 
     fun updateBoneRotation(boneId: Int, rotation: Vector4) {
@@ -276,6 +359,14 @@ class FilamentController(
     }
 
     private fun cleanup() {
+        morphTargetBuffer?.let {
+            engine.destroyMorphTargetBuffer(it)
+            morphTargetBuffer = null
+        }
+        morphNameToIndex.clear()
+        morphIdToIndex.clear()
+        activeMorphTargetCount = 0
+
         if (nativeMeshPtr != 0L) {
             nativeLib.destroyMesh(nativeMeshPtr)
             nativeMeshPtr = 0

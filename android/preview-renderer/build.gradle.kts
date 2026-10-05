@@ -38,4 +38,6 @@ dependencies {
     implementation("com.google.android.filament:gltfio-android:$filamentVersion")
     // Add Filamat for material compilation
     implementation("com.google.android.filament:filamat-android:$filamentVersion")
+
+    testImplementation("junit:junit:4.13.2")
 }
