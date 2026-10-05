@@ -18,6 +18,10 @@ on:
       - 'pyrightconfig.json'
       - '.github/workflows/python-ci.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -29,6 +33,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            .flake8
+            .pylintrc
+            .mypy.ini
+            pyrightconfig.json
+            .github/workflows/python-ci.yml
 
       - name: Install dependencies and static analysis tools
         run: |
