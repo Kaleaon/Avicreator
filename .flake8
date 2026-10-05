@@ -1,8 +1,8 @@
 [flake8]
 max-line-length = 120
-# flake8 doesn't understand Blender's property annotations
-# WTF W503 and W504 contradict each other
-# Very strange
+# F722: flake8 doesn't understand Blender's property annotations
+# W503: W503 and W504 contradict each other
+# F821: Very strange
 ignore =
     F722,
     W503,
@@ -34,6 +34,8 @@ ignore =
     E721,
     E722,
     F401,
-    F841
+    F841,
+    W293,
+    W391
 
-exclude = lib/yaml, tmp, dev, demo, backups
+exclude = lib/yaml, tmp, dev, demo, backups, .git, __pycache__, build, dist
