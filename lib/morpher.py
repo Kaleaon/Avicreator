@@ -155,7 +155,7 @@ class Morpher:
         self.sj_calc.recalc()
         self.update_rig()
 
-    def apply_morph_data(self, data, preset_mix):
+    def apply_morph_data(self, data, mix_factor=1.0):
         if data is None:
             self.reset_meta()
             data = {}
@@ -165,13 +165,21 @@ class Morpher:
                 # TODO handle preset_mix?
                 value = meta_props.get(name, 0)
                 self.core.obj.data["cmorph_meta_" + name] = value
+        if isinstance(mix_factor, bool):
+            factor = 0.5 if mix_factor else 1.0
+        else:
+            try:
+                factor = float(mix_factor)
+            except (ValueError, TypeError):
+                factor = 1.0
+            factor = max(0.0, min(1.0, factor))
         morph_props = data.get("morphs", {}).copy()
         for morph in self.core.morphs_l2:
             if not morph.name:
                 continue
-            value = morph_props.get(morph.name, 0)
-            if preset_mix:
-                value = (value + self.core.prop_get(morph.name)) / 2
+            preset_val = morph_props.get(morph.name, 0)
+            current_val = self.core.prop_get(morph.name)
+            value = current_val * (1.0 - factor) + preset_val * factor
             self.core.prop_set(morph.name, value)
             try:
                 del morph_props[morph.name]
