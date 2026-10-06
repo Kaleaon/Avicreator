@@ -1,0 +1,18 @@
+[package]
+name = "avicreator-ffi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "C-FFI and mobile bridge exports for Avicreator core engine"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+avicreator-core = { path = "../avicreator-core" }
+avicreator-schema = { path = "../avicreator-schema" }
+serde_json = { workspace = true }
+
+[build-dependencies]
+cbindgen = "0.27"

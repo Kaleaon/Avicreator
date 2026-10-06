@@ -1,0 +1,11 @@
+[package]
+name = "avicreator-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core mesh deformation, vector math, and morph calculations for Avicreator"
+
+[dependencies]
+avicreator-schema = { path = "../avicreator-schema" }
+thiserror = { workspace = true }

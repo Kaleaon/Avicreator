@@ -1,0 +1,23 @@
+[package]
+name = "avicreator-wasm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "WebAssembly API bindings for browser integration of Avicreator core engine"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+avicreator-core = { path = "../avicreator-core" }
+avicreator-schema = { path = "../avicreator-schema" }
+wasm-bindgen = { workspace = true }
+web-sys = { workspace = true }
+js-sys = { workspace = true }
+serde-wasm-bindgen = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

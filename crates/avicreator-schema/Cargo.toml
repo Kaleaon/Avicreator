@@ -1,0 +1,11 @@
+[package]
+name = "avicreator-schema"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Serde-compatible data structures for asset manifests, skeleton nodes, and material specifications"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
