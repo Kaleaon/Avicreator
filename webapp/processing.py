@@ -123,10 +123,13 @@ def _extract_archive(archive_path: Path, destination: Path) -> List[Path]:
 
 @functools.lru_cache(maxsize=1)
 def _load_base_mesh_catalog() -> Dict[str, xml_base_mesh.BaseMesh]:
-    catalog = xml_base_mesh.load_dir(str(BASE_MESH_DIRECTORY))
+    catalog = {}
+    if BASE_MESH_DIRECTORY.exists():
+        catalog = xml_base_mesh.load_dir(str(BASE_MESH_DIRECTORY))
     if not catalog:
         fallback = Path(__file__).resolve().parents[1] / "base_meshes"
-        catalog = xml_base_mesh.load_dir(str(fallback))
+        if fallback.exists():
+            catalog = xml_base_mesh.load_dir(str(fallback))
     return catalog
 
 

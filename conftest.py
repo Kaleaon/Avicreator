@@ -46,7 +46,7 @@ if "bpy" not in sys.modules:
     mock_bpy.app.handlers = MockModule()
     mock_bpy.props = MockModule()
     mock_bpy.props._PropertyDeferred = DummyPropertyDeferred
-    
+
     mock_bpy.types = MockModule()
     mock_bpy.types.Operator = DummyOperator
     mock_bpy.types.Panel = DummyPanel
@@ -56,10 +56,10 @@ if "bpy" not in sys.modules:
     mock_bpy.types.PropertyGroup = DummyPropertyGroup
     mock_bpy.types.AddonPreferences = DummyAddonPreferences
     mock_bpy.types.Object = DummyObject
-    
+
     mock_bpy.utils = MockModule()
     mock_bpy.utils.register_classes_factory = lambda classes: (lambda: None, lambda: None)
-    
+
     mock_bpy_extras = MockModule()
     mock_bpy_extras.wm_utils = MockModule()
     mock_bpy_extras.wm_utils.progress_report = MockModule()
