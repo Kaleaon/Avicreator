@@ -1,0 +1,28 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ main, "stitch/*" ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Workspace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build Workspace
+        run: cargo build --workspace
+      - name: Run Workspace Tests
+        run: cargo test --workspace
+      - name: Build WebAssembly Target
+        run: cargo build -p avicreator-wasm --target wasm32-unknown-unknown --release
+      - name: Verify C Header Generation
+        run: cargo test -p avicreator-ffi
