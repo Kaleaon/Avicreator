@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, "stitch/**" ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, wasm32-unknown-unknown
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy pytest maturin setuptools
+
+      - name: Cargo Test (Release)
+        run: cargo test --release
+
+      - name: Cross-Target Checks
+        run: |
+          cargo check --target x86_64-unknown-linux-gnu
+          cargo check --target aarch64-unknown-linux-gnu
+          cargo check --target wasm32-unknown-unknown --no-default-features --features wasm
+
+      - name: WASM Build & Size Verification
+        run: |
+          cargo build --target wasm32-unknown-unknown --release --no-default-features --features wasm
+          ls -lh target/wasm32-unknown-unknown/release/libavicreator.wasm
+
+      - name: Build PyO3 Wheel & Run Python Tests
+        run: |
+          maturin build -r
+          pip install --force-reinstall target/wheels/*.whl
+          pytest -v python_tests/
