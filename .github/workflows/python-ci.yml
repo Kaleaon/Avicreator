@@ -1,0 +1,62 @@
+name: Python CI
+
+on:
+  push:
+    paths:
+      - '**/*.py'
+      - '.flake8'
+      - '.pylintrc'
+      - '.mypy.ini'
+      - 'pyrightconfig.json'
+      - '.github/workflows/python-ci.yml'
+  pull_request:
+    paths:
+      - '**/*.py'
+      - '.flake8'
+      - '.pylintrc'
+      - '.mypy.ini'
+      - 'pyrightconfig.json'
+      - '.github/workflows/python-ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            .flake8
+            .pylintrc
+            .mypy.ini
+            pyrightconfig.json
+            .github/workflows/python-ci.yml
+
+      - name: Install dependencies and static analysis tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pylint mypy pyright
+
+      - name: Run flake8
+        run: flake8 .
+
+      - name: Run pylint
+        run: pylint --rcfile=.pylintrc $(git ls-files '*.py' | grep -v 'lib/yaml')
+
+      - name: Run mypy
+        run: |
+          REPO_NAME=$(basename "$GITHUB_WORKSPACE")
+          cd ..
+          mypy --config-file "$REPO_NAME/.mypy.ini" --explicit-package-bases "$REPO_NAME"
+
+      - name: Run pyright
+        run: pyright
