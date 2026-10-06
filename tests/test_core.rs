@@ -70,8 +70,9 @@ fn test_morpher_performance_50k_vertices() {
 
     assert_eq!(evaluated.len(), num_verts);
     println!("Morpher 50k vertex evaluation time: {:?}", elapsed);
+    let max_allowed = if cfg!(debug_assertions) { 0.050 } else { 0.005 };
     assert!(
-        elapsed.as_secs_f64() < 0.005, // Sub-millisecond or under 5ms guardrail
+        elapsed.as_secs_f64() < max_allowed, // Sub-5ms in release, 50ms in debug
         "Evaluation took too long: {:?}",
         elapsed
     );

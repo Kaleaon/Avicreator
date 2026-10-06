@@ -247,7 +247,6 @@ def export_gltf_standalone(filepath, mesh_data, armature_data=None, format="glb"
     accessors = []
 
     def _add_buffer_view(data_bytes, target=None):
-        nonlocal buffer_bytes
         # 4-byte alignment requirement
         offset = len(buffer_bytes)
         padding = (4 - (offset % 4)) % 4

@@ -227,10 +227,6 @@ class FilamentController(
             .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, 12)
             .attribute(VertexBuffer.VertexAttribute.UV0, 1, VertexBuffer.AttributeType.FLOAT2, 0, 8)
 
-        if (targetCount > 0) {
-            vbBuilder.morphTargetCount(targetCount)
-        }
-
         val vb = vbBuilder.build(engine)
         vb.setBufferAt(engine, 0, vertexBufferData)
         vb.setBufferAt(engine, 1, uvData)
@@ -287,7 +283,7 @@ class FilamentController(
         }
 
         morphTargetBuffer?.let { mtb ->
-            builder.morphTargetBuffer(0, mtb)
+            builder.morphing(0, activeMorphTargetCount, mtb)
         }
 
         builder.build(engine, entity)
@@ -359,10 +355,7 @@ class FilamentController(
     }
 
     private fun cleanup() {
-        morphTargetBuffer?.let {
-            engine.destroyMorphTargetBuffer(it)
-            morphTargetBuffer = null
-        }
+        morphTargetBuffer = null
         morphNameToIndex.clear()
         morphIdToIndex.clear()
         activeMorphTargetCount = 0

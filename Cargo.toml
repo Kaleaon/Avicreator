@@ -1,5 +1,5 @@
 [package]
-name = "avicreator-core"
+name = "libavicreator"
 version = "0.1.0"
 edition = "2021"
 authors = ["Avicreator Core Team"]
@@ -37,8 +37,6 @@ js-sys = { version = "0.3", optional = true }
 [dev-dependencies]
 criterion = "0.5"
 
-[profile.release]
-opt-level = 3
 [workspace]
 members = [
     "crates/avicreator-schema",
