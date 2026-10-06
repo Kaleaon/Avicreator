@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy scipy pytest pyyaml pillow
+          pip install numpy scipy pytest pyyaml pillow fastapi httpx python-multipart
 
       - name: Run tests with pytest
         run: |

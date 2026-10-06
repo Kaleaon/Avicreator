@@ -307,34 +307,22 @@ def _process_vertex_weights(vertices, deform_indices):
         gc.disable()
     try:
         if 0 <= max_idx < 10000:
-            is_def = [False] * (max_idx + 1)
+            is_def = [False] * 10000
             for idx in def_set:
-                is_def[idx] = True
-            is_def_len = len(is_def)
+                if idx < 10000:
+                    is_def[idx] = True
 
             for v in vertices:
                 groups = v.groups
                 if not groups:
                     continue
                 lg = len(groups)
-                if lg == 2:
-                    g0, g1 = groups[0], groups[1]
-                    gid0, gid1 = g0.group, g1.group
-                    m0 = gid0 < is_def_len and is_def[gid0]
-                    m1 = gid1 < is_def_len and is_def[gid1]
-                    total_w = (g0.weight if m0 else 0.0) + (g1.weight if m1 else 0.0)
-                    if total_w > 1.0:
-                        scale = 1.0 / total_w
-                        if m0:
-                            g0.weight *= scale
-                        if m1:
-                            g1.weight *= scale
-                elif lg == 3:
+                if lg == 3:
                     g0, g1, g2 = groups[0], groups[1], groups[2]
                     gid0, gid1, gid2 = g0.group, g1.group, g2.group
-                    m0 = gid0 < is_def_len and is_def[gid0]
-                    m1 = gid1 < is_def_len and is_def[gid1]
-                    m2 = gid2 < is_def_len and is_def[gid2]
+                    m0 = is_def[gid0]
+                    m1 = is_def[gid1]
+                    m2 = is_def[gid2]
                     total_w = (g0.weight if m0 else 0.0) + (g1.weight if m1 else 0.0) + (g2.weight if m2 else 0.0)
                     if total_w > 1.0:
                         scale = 1.0 / total_w
@@ -344,17 +332,31 @@ def _process_vertex_weights(vertices, deform_indices):
                             g1.weight *= scale
                         if m2:
                             g2.weight *= scale
+                elif lg == 2:
+                    g0, g1 = groups[0], groups[1]
+                    gid0, gid1 = g0.group, g1.group
+                    m0 = is_def[gid0]
+                    m1 = is_def[gid1]
+                    total_w = (g0.weight if m0 else 0.0) + (g1.weight if m1 else 0.0)
+                    if total_w > 1.0:
+                        scale = 1.0 / total_w
+                        if m0:
+                            g0.weight *= scale
+                        if m1:
+                            g1.weight *= scale
+                elif lg == 1:
+                    g0 = groups[0]
+                    if is_def[g0.group] and g0.weight > 1.0:
+                        g0.weight = 1.0
                 else:
                     total_w = 0.0
                     for g in groups:
-                        gid = g.group
-                        if gid < is_def_len and is_def[gid]:
+                        if is_def[g.group]:
                             total_w += g.weight
                     if total_w > 1.0:
                         scale = 1.0 / total_w
                         for g in groups:
-                            gid = g.group
-                            if gid < is_def_len and is_def[gid]:
+                            if is_def[g.group]:
                                 g.weight *= scale
         else:
             for v in vertices:

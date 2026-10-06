@@ -40,7 +40,7 @@ sys.modules['bpy_extras.wm_utils'] = wm_utils_mock
 sys.modules['bpy_extras.wm_utils.progress_report'] = progress_report_mock
 sys.modules['bpy_extras.io_utils'] = io_utils_mock
 
-if 'bpy' not in sys.modules or not hasattr(sys.modules['bpy'], 'app'):
+if 'bpy' not in sys.modules or not hasattr(sys.modules['bpy'], 'context'):
     bpy_mock = types.ModuleType('bpy')
     wm_mock = types.SimpleNamespace()
     ui_mock = types.SimpleNamespace()

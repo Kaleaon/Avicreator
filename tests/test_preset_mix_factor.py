@@ -1,8 +1,16 @@
 import pytest
 import types
 
-from CharMorphExpansion.lib.morpher import Morpher
-from CharMorphExpansion import morphing
+try:
+    from Avatarmaker.lib.morpher import Morpher
+    from Avatarmaker import morphing
+except ImportError:
+    try:
+        from CharMorphExpansion.lib.morpher import Morpher
+        from CharMorphExpansion import morphing
+    except ImportError:
+        from lib.morpher import Morpher
+        import morphing
 
 
 class DummyMorph:
