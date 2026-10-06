@@ -29,8 +29,10 @@ include(
     ":libs:ktheme-core",
 )
 
+val localKthemeCompose = file("libs/ktheme-compose")
+val localKthemeCore = file("libs/ktheme-core")
 val extKthemeCompose = file("../../Ktheme/libs/ktheme-compose")
 val extKthemeCore = file("../../Ktheme/libs/ktheme-core")
 
-project(":libs:ktheme-compose").projectDir = if (extKthemeCompose.exists()) extKthemeCompose else file("libs/ktheme-compose")
-project(":libs:ktheme-core").projectDir = if (extKthemeCore.exists()) extKthemeCore else file("libs/ktheme-core")
+project(":libs:ktheme-compose").projectDir = if (localKthemeCompose.exists()) localKthemeCompose else extKthemeCompose
+project(":libs:ktheme-core").projectDir = if (localKthemeCore.exists()) localKthemeCore else extKthemeCore
