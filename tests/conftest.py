@@ -1,6 +1,17 @@
 import sys
+import os
 import types
 import numpy as np
+
+# Ensure root directory is package path for CharMorphExpansion
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+if 'CharMorphExpansion' not in sys.modules:
+    cme = types.ModuleType('CharMorphExpansion')
+    cme.__path__ = [parent_dir]
+    sys.modules['CharMorphExpansion'] = cme
 
 # Injected mock modules for headless testing
 for mod_name in ['addon_utils', 'rna_prop_ui', 'gpu', 'gpu_extras', 'idprop']:
@@ -156,7 +167,7 @@ if 'bmesh' not in sys.modules:
     bmesh_mock = types.ModuleType('bmesh')
     sys.modules['bmesh'] = bmesh_mock
 
-if 'mathutils' not in sys.modules:
+if 'mathutils' not in sys.modules or not hasattr(sys.modules['mathutils'], 'Vector') or not callable(getattr(sys.modules['mathutils'], 'Vector', None)):
     mathutils_mock = types.ModuleType('mathutils')
 
     class Vector(np.ndarray):

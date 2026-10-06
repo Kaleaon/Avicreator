@@ -312,13 +312,38 @@ def is_sl_armature_valid(mesh_obj, armature_obj=None):
     return is_sl_armature(armature_obj)
 
 
-def generate_collada_dae_xml(filepath, mesh_obj, armature_obj):
+def generate_collada_dae_xml(filepath, mesh_obj, armature_obj=None):
     """
     Generate Collada .dae XML file formatted for Second Life & OpenSim mesh importers.
+    Extracts real vertex positions, normals, triangle indices, bind shape matrices,
+    mBone joint hierarchy, and skin weight maps from mesh_obj (BaseMesh, Object, or Dict).
     """
     import xml.etree.ElementTree as ET
     from xml.dom import minidom
     import datetime
+    import numpy as np
+
+    try:
+        from . import gltf_exporter
+    except ImportError:
+        import gltf_exporter
+
+    extracted = gltf_exporter.extract_export_mesh_data(mesh_obj, armature_obj)
+
+    positions = extracted["positions"]
+    normals = extracted["normals"]
+    triangles = extracted["triangle_indices"]
+    joints = extracted["joint_indices"]
+    weights = extracted["skin_weights"]
+    joint_names = extracted["joint_names"]
+    bones_dict = extracted["bones_dict"]
+
+    mesh_name = getattr(mesh_obj, "name", "character_mesh")
+    if isinstance(mesh_obj, dict) and "name" in mesh_obj:
+        mesh_name = mesh_obj["name"]
+
+    num_verts = len(positions)
+    num_tris = len(triangles) // 3 if len(triangles) >= 3 else 0
 
     collada = ET.Element("COLLADA", {
         "xmlns": "http://www.collada.org/2005/11/COLLADASchema",
@@ -343,26 +368,41 @@ def generate_collada_dae_xml(filepath, mesh_obj, armature_obj):
 
     # 2. Library Geometries
     lib_geom = ET.SubElement(collada, "library_geometries")
-    mesh_name = mesh_obj.name if hasattr(mesh_obj, "name") else "character_mesh"
     geom = ET.SubElement(lib_geom, "geometry", {"id": f"{mesh_name}-mesh", "name": mesh_name})
     mesh_elem = ET.SubElement(geom, "mesh")
 
     # Positions source
+    pos_str = " ".join(f"{x:.6f} {y:.6f} {z:.6f}" for x, y, z in positions)
     pos_src = ET.SubElement(mesh_elem, "source", {"id": f"{mesh_name}-mesh-positions"})
-    pos_array = ET.SubElement(pos_src, "float_array", {"id": f"{mesh_name}-mesh-positions-array", "count": "12"})
-    pos_array.text = "0 0 0  1 0 0  0 1 0  0 0 1"
-    tech_common = ET.SubElement(pos_src, "technique_common")
-    accessor = ET.SubElement(tech_common, "accessor", {"source": f"#{mesh_name}-mesh-positions-array", "count": "4", "stride": "3"})
+    pos_array = ET.SubElement(pos_src, "float_array", {"id": f"{mesh_name}-mesh-positions-array", "count": str(num_verts * 3)})
+    pos_array.text = pos_str
+    tech_pos = ET.SubElement(pos_src, "technique_common")
+    acc_pos = ET.SubElement(tech_pos, "accessor", {"source": f"#{mesh_name}-mesh-positions-array", "count": str(num_verts), "stride": "3"})
     for axis in ["X", "Y", "Z"]:
-        ET.SubElement(accessor, "param", {"name": axis, "type": "float"})
+        ET.SubElement(acc_pos, "param", {"name": axis, "type": "float"})
+
+    # Normals source
+    norm_str = " ".join(f"{x:.6f} {y:.6f} {z:.6f}" for x, y, z in normals)
+    norm_src = ET.SubElement(mesh_elem, "source", {"id": f"{mesh_name}-mesh-normals"})
+    norm_array = ET.SubElement(norm_src, "float_array", {"id": f"{mesh_name}-mesh-normals-array", "count": str(num_verts * 3)})
+    norm_array.text = norm_str
+    tech_norm = ET.SubElement(norm_src, "technique_common")
+    acc_norm = ET.SubElement(tech_norm, "accessor", {"source": f"#{mesh_name}-mesh-normals-array", "count": str(num_verts), "stride": "3"})
+    for axis in ["X", "Y", "Z"]:
+        ET.SubElement(acc_norm, "param", {"name": axis, "type": "float"})
 
     vertices = ET.SubElement(mesh_elem, "vertices", {"id": f"{mesh_name}-mesh-vertices"})
     ET.SubElement(vertices, "input", {"semantic": "POSITION", "source": f"#{mesh_name}-mesh-positions"})
 
-    triangles = ET.SubElement(mesh_elem, "triangles", {"count": "1"})
-    ET.SubElement(triangles, "input", {"semantic": "VERTEX", "source": f"#{mesh_name}-mesh-vertices", "offset": "0"})
-    p_elem = ET.SubElement(triangles, "p")
-    p_elem.text = "0 1 2"
+    triangles_elem = ET.SubElement(mesh_elem, "triangles", {"count": str(num_tris)})
+    ET.SubElement(triangles_elem, "input", {"semantic": "VERTEX", "source": f"#{mesh_name}-mesh-vertices", "offset": "0"})
+    ET.SubElement(triangles_elem, "input", {"semantic": "NORMAL", "source": f"#{mesh_name}-mesh-normals", "offset": "1"})
+
+    p_indices = []
+    for idx in triangles:
+        p_indices.extend([str(idx), str(idx)])
+    p_elem = ET.SubElement(triangles_elem, "p")
+    p_elem.text = " ".join(p_indices)
 
     # 3. Library Controllers
     lib_ctrl = ET.SubElement(collada, "library_controllers")
@@ -372,25 +412,117 @@ def generate_collada_dae_xml(filepath, mesh_obj, armature_obj):
     bind_shape = ET.SubElement(skin, "bind_shape_matrix")
     bind_shape.text = "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"
 
+    num_joints = len(joint_names)
+    # Joint Name Array
     joints_src = ET.SubElement(skin, "source", {"id": f"Armature_{mesh_name}-skin-joints"})
-    j_array = ET.SubElement(joints_src, "Name_array", {"id": f"Armature_{mesh_name}-skin-joints-array", "count": "3"})
-    j_array.text = "mPelvis mChest mHead"
+    j_array = ET.SubElement(joints_src, "Name_array", {"id": f"Armature_{mesh_name}-skin-joints-array", "count": str(num_joints)})
+    j_array.text = " ".join(joint_names)
     j_tech = ET.SubElement(joints_src, "technique_common")
-    j_acc = ET.SubElement(j_tech, "accessor", {"source": f"#Armature_{mesh_name}-skin-joints-array", "count": "3", "stride": "1"})
+    j_acc = ET.SubElement(j_tech, "accessor", {"source": f"#Armature_{mesh_name}-skin-joints-array", "count": str(num_joints), "stride": "1"})
     ET.SubElement(j_acc, "param", {"name": "JOINT", "type": "Name"})
+
+    # Inverse Bind Poses Array
+    inv_bind_matrices = []
+    for j_name in joint_names:
+        head = (0.0, 0.0, 0.0)
+        if isinstance(bones_dict, dict) and j_name in bones_dict:
+            b = bones_dict[j_name]
+            head = b.head if hasattr(b, "head") else b.get("head", (0.0, 0.0, 0.0))
+        elif j_name in SL_BENTO_BONES:
+            head = SL_BENTO_BONES[j_name]["head"]
+        # Inverse bind matrix (row-major for Collada: 1 0 0 -hx  0 1 0 -hy  0 0 1 -hz  0 0 0 1)
+        inv_matrix_str = f"1 0 0 {-head[0]:.6f} 0 1 0 {-head[1]:.6f} 0 0 1 {-head[2]:.6f} 0 0 0 1"
+        inv_bind_matrices.append(inv_matrix_str)
+
+    poses_src = ET.SubElement(skin, "source", {"id": f"Armature_{mesh_name}-skin-bind_poses"})
+    p_array = ET.SubElement(poses_src, "float_array", {"id": f"Armature_{mesh_name}-skin-bind_poses-array", "count": str(num_joints * 16)})
+    p_array.text = " ".join(inv_bind_matrices)
+    p_tech = ET.SubElement(poses_src, "technique_common")
+    p_acc = ET.SubElement(p_tech, "accessor", {"source": f"#Armature_{mesh_name}-skin-bind_poses-array", "count": str(num_joints), "stride": "16"})
+    ET.SubElement(p_acc, "param", {"name": "TRANSFORM", "type": "float4x4"})
+
+    # Weights Array
+    # Flatten weights per vertex into unique list
+    weight_list = []
+    vcount_list = []
+    v_pairs = []
+
+    for vidx in range(num_verts):
+        v_joints = joints[vidx]
+        v_weights = weights[vidx]
+        v_active = [(j, w) for j, w in zip(v_joints, v_weights) if w > 0.0]
+        if not v_active and num_joints > 0:
+            v_active = [(0, 1.0)]
+
+        vcount_list.append(str(len(v_active)))
+        for j_idx, w_val in v_active:
+            w_idx = len(weight_list)
+            weight_list.append(f"{w_val:.6f}")
+            v_pairs.extend([str(j_idx), str(w_idx)])
+
+    weights_src = ET.SubElement(skin, "source", {"id": f"Armature_{mesh_name}-skin-weights"})
+    w_array = ET.SubElement(weights_src, "float_array", {"id": f"Armature_{mesh_name}-skin-weights-array", "count": str(len(weight_list))})
+    w_array.text = " ".join(weight_list)
+    w_tech = ET.SubElement(weights_src, "technique_common")
+    w_acc = ET.SubElement(w_tech, "accessor", {"source": f"#Armature_{mesh_name}-skin-weights-array", "count": str(len(weight_list)), "stride": "1"})
+    ET.SubElement(w_acc, "param", {"name": "WEIGHT", "type": "float"})
+
+    # Joints Element
+    joints_elem = ET.SubElement(skin, "joints")
+    ET.SubElement(joints_elem, "input", {"semantic": "JOINT", "source": f"#Armature_{mesh_name}-skin-joints"})
+    ET.SubElement(joints_elem, "input", {"semantic": "INV_BIND_MATRIX", "source": f"#Armature_{mesh_name}-skin-bind_poses"})
+
+    # Vertex Weights Element
+    vw_elem = ET.SubElement(skin, "vertex_weights", {"count": str(num_verts)})
+    ET.SubElement(vw_elem, "input", {"semantic": "JOINT", "source": f"#Armature_{mesh_name}-skin-joints", "offset": "0"})
+    ET.SubElement(vw_elem, "input", {"semantic": "WEIGHT", "source": f"#Armature_{mesh_name}-skin-weights", "offset": "1"})
+
+    vcount_elem = ET.SubElement(vw_elem, "vcount")
+    vcount_elem.text = " ".join(vcount_list)
+    v_elem = ET.SubElement(vw_elem, "v")
+    v_elem.text = " ".join(v_pairs)
 
     # 4. Library Visual Scenes
     lib_scenes = ET.SubElement(collada, "library_visual_scenes")
     scene = ET.SubElement(lib_scenes, "visual_scene", {"id": "Scene", "name": "Scene"})
 
-    pelvis_node = ET.SubElement(scene, "node", {"id": "mPelvis", "name": "mPelvis", "type": "JOINT"})
-    chest_node = ET.SubElement(pelvis_node, "node", {"id": "mChest", "name": "mChest", "type": "JOINT"})
-    head_node = ET.SubElement(chest_node, "node", {"id": "mHead", "name": "mHead", "type": "JOINT"})
+    # Build Joint Hierarchy
+    joint_nodes = {}
+    root_joint_name = joint_names[0] if joint_names else "mPelvis"
+
+    for j_name in joint_names:
+        parent_name = None
+        head = (0.0, 0.0, 0.0)
+        if isinstance(bones_dict, dict) and j_name in bones_dict:
+            b = bones_dict[j_name]
+            head = b.head if hasattr(b, "head") else b.get("head", (0.0, 0.0, 0.0))
+            parent_name = b.parent if hasattr(b, "parent") else b.get("parent")
+        elif j_name in SL_BENTO_BONES:
+            head = SL_BENTO_BONES[j_name]["head"]
+            parent_name = SL_BENTO_BONES[j_name].get("parent")
+
+        parent_node = joint_nodes.get(parent_name, scene) if parent_name else scene
+        j_node = ET.SubElement(parent_node, "node", {"id": j_name, "name": j_name, "type": "JOINT"})
+
+        # Translate offset relative to parent
+        p_head = (0.0, 0.0, 0.0)
+        if parent_name:
+            if isinstance(bones_dict, dict) and parent_name in bones_dict:
+                pb = bones_dict[parent_name]
+                p_head = pb.head if hasattr(pb, "head") else pb.get("head", (0.0, 0.0, 0.0))
+            elif parent_name in SL_BENTO_BONES:
+                p_head = SL_BENTO_BONES[parent_name]["head"]
+
+        rel_t = (head[0] - p_head[0], head[1] - p_head[1], head[2] - p_head[2])
+        trans = ET.SubElement(j_node, "translate")
+        trans.text = f"{rel_t[0]:.6f} {rel_t[1]:.6f} {rel_t[2]:.6f}"
+
+        joint_nodes[j_name] = j_node
 
     mesh_node = ET.SubElement(scene, "node", {"id": mesh_name, "name": mesh_name, "type": "NODE"})
     inst_ctrl = ET.SubElement(mesh_node, "instance_controller", {"url": f"#Armature_{mesh_name}-skin"})
     skel = ET.SubElement(inst_ctrl, "skeleton")
-    skel.text = "#mPelvis"
+    skel.text = f"#{root_joint_name}"
 
     # Scene
     scene_elem = ET.SubElement(collada, "scene")
