@@ -1,0 +1,90 @@
+General:
+  - Proper context handling (use bpy.context only if really necessary)
+
+Character management:
+  - Unzipper for character/asset packages
+  - Dependency analyser so you can delete characters without affecting other ones
+    (may be tricky for textures, use special texture_deps config?)
+
+Performance:
+  - Fast YAML library
+
+Art:
+  - Compare bumping with MB-Lab?
+  - More hairstyles
+
+Char creation:
+  - Asset list in creation panel?
+  - Alternative topologies from library
+
+Morphing:
+  - Manual sculpting mode
+  - Shape rig morphing
+  - Allow to mix L1 shapes?
+  - Replace preset mix with mix factor
+
+Finalize:
+  - Choice between materials displacement and displacement modifier
+
+Materials:
+  - Skin coloring for Antonia
+  - Shared textures for assets
+  - Lip color control?
+  - Ability to disable skin features (blush, freckles)
+    and completely remove them from node tree removing unneccessary texture images too
+  - Texture layers?
+
+Reom:
+  - More symmetry fixes
+
+Randomize:
+  - Randomize eye and skin colors
+
+Hair:
+  - Import scalp vertex groups only when necessary so VG cleanup on finalize won't be necessary anymore
+  - Rework hair shaders engine
+  - Lichtso hair engine
+  - Move hair.blend to char.blend?
+  - Hair refitting after edit
+
+Fitting:
+  - Hybrid mode: store asset morphs in shapekeys even in numpy mode (probably not activating them),
+      get asset morph data from morpher-code, not charlib!
+  - BMesh instead of creating from_mix shapekey?
+  - MakeHuman asset support ?
+  - Bounding box transform?
+  - More fitting settings? (Thresholds and so on)
+  - Asset baking?
+  - Ability to select MB-Lab fitting algorithm
+  - Use avg instead of max for thresh? I think no, we need to use no less than first n
+
+Assets:
+  - Use default underwear assets instead of censors -- done for Antonia
+  - Image browser for clothes and hair
+
+Rigging:
+  - Always place rig to the same collection with the character
+  - Combining rig from subrigs
+  - Fix Reom's eyelashes in ARP
+  - Force bone bending angle
+  - Generate rig from metarig
+  - Use VertexWeightProximity or geonodes for folding knees, elbows and belly
+  - Add chest and abdomen bones for breathing -- done for Antonia
+  - Pupil dilation bones -- done for Antonia
+  - Size and limb length morphs for Antonia
+  - Relative rigger instead of current absolute one?
+  - Head pivot shift
+  - Deformation cage support? (it seems that better fitting algorighm is needed for it)
+  - Fork and optimize Rigify for really realtime morphing?
+  - Blenrig?
+
+Editing:
+  - Automatic material converter (It took quite a while to convert Reom's materials)
+  - Refine for XL recalc
+  - MB-Lab import/export tools
+  - Export L2__Body_Size_min back to MB-Lab
+
+Pose:
+  - Fix glitchy capture poses
+  - Different mix modes
+  - Native pose support (not just MB-Lab)
