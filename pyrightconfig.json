@@ -1,0 +1,1 @@
+{"typeCheckingMode": "off", "exclude": ["lib/yaml", "backups", "tmp", "dev", "demo"]}

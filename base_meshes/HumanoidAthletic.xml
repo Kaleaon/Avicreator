@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<BaseMesh name="HumanoidAthletic" version="1.0">
+    <Metadata>
+        <Description>Athletic Humanoid Preset</Description>
+    </Metadata>
+    <Topology unit="meters">
+        <Vertices>
+            <Vertex id="0" x="0.0" y="0.0" z="0.0"/>
+            <Vertex id="1" x="1.0" y="1.0" z="1.0"/>
+        </Vertices>
+        <Faces>
+            <Face verts="0 1 0"/>
+        </Faces>
+    </Topology>
+    <Rig>
+        <Bone name="pelvis" head_x="0.0" head_y="0.0" head_z="1.0" tail_x="0.0" tail_y="0.0" tail_z="1.2"/>
+    </Rig>
+    <WeightLayers>
+        <Layer name="skin" type="skin" normalised="true">
+            <Description>Skin weights</Description>
+            <Bone name="pelvis">
+                <Weight vertex="0" value="1.0"/>
+                <Weight vertex="1" value="0.9"/>
+            </Bone>
+        </Layer>
+    </WeightLayers>
+    <Sizing>
+        <Parameter name="height" value="1.80" unit="m" min="1.5" max="2.2">Height in meters</Parameter>
+    </Sizing>
+</BaseMesh>
