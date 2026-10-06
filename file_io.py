@@ -37,7 +37,9 @@ class UIProps:
         items=[
             ("yaml", "CharMorph (yaml)", ""),
             ("json", "MB-Lab (json)", ""),
-            ("dae", "Collada (.dae)", "Second Life / OpenSim Collada format")
+            ("dae", "Collada (.dae)", "Second Life / OpenSim Collada format"),
+            ("gltf", "glTF 2.0 (.gltf)", "Khronos glTF 2.0 JSON format"),
+            ("glb", "glTF Binary (.glb)", "Khronos glTF 2.0 Binary format"),
         ])
     bake_shape_keys: bpy.props.BoolProperty(
         name="Bake Shape Keys on Export",
@@ -72,36 +74,52 @@ class CHARMORPH_PT_ImportExport(bpy.types.Panel):
             col.operator("charmorph.export_yaml")
         elif ui.export_format == "dae":
             col.operator("charmorph.export_dae")
+        elif ui.export_format == "gltf":
+            col.operator("charmorph.export_gltf")
+        elif ui.export_format == "glb":
+            col.operator("charmorph.export_glb")
         col.operator("charmorph.import")
 
 
 def bake_shape_keys_for_export(obj):
-    """Collapse active shape key stack into a single mesh state without altering visual appearance."""
-    if obj is None or getattr(obj, "data", None) is None:
-        return obj
-    data = getattr(obj, "data", None)
-    keys = getattr(data, "shape_keys", None)
-    if keys is None or getattr(keys, "key_blocks", None) is None:
+    """Collapse active shape key stack into a single mesh state without calling obj.shape_key_remove or mutating Blender data blocks."""
+    if obj is None:
         return obj
 
-    morphed_co = utils.get_morphed_numpy(obj) if utils and hasattr(utils, "get_morphed_numpy") else None
-    if morphed_co is not None and hasattr(data, "vertices") and len(morphed_co) == len(data.vertices):
+    morphed_co = None
+    if utils and hasattr(utils, "get_morphed_numpy"):
+        try:
+            morphed_co = utils.get_morphed_numpy(obj)
+        except Exception:
+            morphed_co = None
+
+    data = getattr(obj, "data", None)
+    if data is not None and hasattr(data, "vertices") and morphed_co is not None and len(morphed_co) == len(data.vertices):
         try:
             data.vertices.foreach_set("co", morphed_co.reshape(-1))
         except Exception:
+            for i, v in enumerate(data.vertices):
+                if hasattr(v, "co"):
+                    v.co = morphed_co[i]
+
+    if morphed_co is not None:
+        setattr(obj, "_baked_co", morphed_co)
+
+    keys = getattr(data, "shape_keys", None) if data is not None else None
+    if keys is not None:
+        kb = getattr(keys, "key_blocks", None)
+        if kb is not None and hasattr(kb, "clear"):
+            try:
+                kb.clear()
+            except Exception:
+                pass
+
+    if data is not None and hasattr(data, "update"):
+        try:
+            data.update()
+        except Exception:
             pass
 
-    if hasattr(obj, "shape_key_remove"):
-        while keys.key_blocks:
-            sk = keys.key_blocks[0]
-            obj.shape_key_remove(sk)
-            if sk in keys.key_blocks:
-                keys.key_blocks.remove(sk)
-    elif hasattr(keys, "key_blocks"):
-        keys.key_blocks.clear()
-
-    if hasattr(data, "update"):
-        data.update()
     return obj
 
 
@@ -203,6 +221,96 @@ class OpExportCollada(bpy.types.Operator, bpy_extras.io_utils.ExportHelper):
             return {'CANCELLED'}
 
 
+class OpExportGltf(bpy.types.Operator, bpy_extras.io_utils.ExportHelper):
+    bl_idname = "charmorph.export_gltf"
+    bl_label = "Export glTF 2.0 (.gltf)"
+    bl_description = "Export character mesh and armature to glTF 2.0 (.gltf) format"
+    filename_ext = ".gltf"
+
+    filter_glob: bpy.props.StringProperty(default="*.gltf", options={'HIDDEN'})
+
+    @classmethod
+    def poll(cls, _):
+        return bool(mm.morpher)
+
+    def execute(self, context):
+        m = mm.morpher
+        char_obj = m.core.obj if m and getattr(m, "core", None) else None
+        if not char_obj and m and hasattr(m, "char"):
+            char_obj = m.char
+
+        if not char_obj and m and hasattr(m, "core") and hasattr(m.core, "char") and hasattr(m.core.char, "xml_base_mesh"):
+            char_obj = m.core.char.xml_base_mesh
+
+        if not char_obj:
+            self.report({'ERROR'}, "No active character object found")
+            return {'CANCELLED'}
+
+        ui = getattr(context.window_manager, "charmorph_ui", None) if context else None
+        bake = getattr(ui, "bake_shape_keys", True) if ui else True
+
+        if bake:
+            bake_shape_keys_for_export(char_obj)
+
+        armature_obj = char_obj.find_armature() if hasattr(char_obj, "find_armature") else None
+        if not armature_obj and m:
+            armature_obj = getattr(m, "rig", None)
+
+        try:
+            from . import gltf_exporter
+            gltf_exporter.export_gltf(self.filepath, char_obj, armature_obj, format="gltf", bake_shape_keys=bake)
+            self.report({'INFO'}, f"Successfully exported glTF model to {self.filepath}")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"glTF export error: {str(e)}")
+            return {'CANCELLED'}
+
+
+class OpExportGlb(bpy.types.Operator, bpy_extras.io_utils.ExportHelper):
+    bl_idname = "charmorph.export_glb"
+    bl_label = "Export glTF Binary (.glb)"
+    bl_description = "Export character mesh and armature to glTF 2.0 Binary (.glb) format"
+    filename_ext = ".glb"
+
+    filter_glob: bpy.props.StringProperty(default="*.glb", options={'HIDDEN'})
+
+    @classmethod
+    def poll(cls, _):
+        return bool(mm.morpher)
+
+    def execute(self, context):
+        m = mm.morpher
+        char_obj = m.core.obj if m and getattr(m, "core", None) else None
+        if not char_obj and m and hasattr(m, "char"):
+            char_obj = m.char
+
+        if not char_obj and m and hasattr(m, "core") and hasattr(m.core, "char") and hasattr(m.core.char, "xml_base_mesh"):
+            char_obj = m.core.char.xml_base_mesh
+
+        if not char_obj:
+            self.report({'ERROR'}, "No active character object found")
+            return {'CANCELLED'}
+
+        ui = getattr(context.window_manager, "charmorph_ui", None) if context else None
+        bake = getattr(ui, "bake_shape_keys", True) if ui else True
+
+        if bake:
+            bake_shape_keys_for_export(char_obj)
+
+        armature_obj = char_obj.find_armature() if hasattr(char_obj, "find_armature") else None
+        if not armature_obj and m:
+            armature_obj = getattr(m, "rig", None)
+
+        try:
+            from . import gltf_exporter
+            gltf_exporter.export_gltf(self.filepath, char_obj, armature_obj, format="glb", bake_shape_keys=bake)
+            self.report({'INFO'}, f"Successfully exported glTF binary model to {self.filepath}")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"glTF export error: {str(e)}")
+            return {'CANCELLED'}
+
+
 class OpImport(bpy.types.Operator, bpy_extras.io_utils.ImportHelper):
     bl_idname = "charmorph.import"
     bl_label = "Import morphs"
@@ -237,4 +345,4 @@ class OpImport(bpy.types.Operator, bpy_extras.io_utils.ImportHelper):
         return {"FINISHED"}
 
 
-classes = [OpImport, OpExportJson, OpExportYaml, OpExportCollada, CHARMORPH_PT_ImportExport]
+classes = [OpImport, OpExportJson, OpExportYaml, OpExportCollada, OpExportGltf, OpExportGlb, CHARMORPH_PT_ImportExport]
