@@ -38,4 +38,4 @@ ignore =
     W293,
     W391
 
-exclude = lib/yaml, tmp, dev, demo, backups, .git, __pycache__, build, dist
+exclude = lib/yaml, tmp, dev, demo, backups, .git, __pycache__, build, dist, .venv, target

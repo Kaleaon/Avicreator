@@ -8,10 +8,11 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-if 'CharMorphExpansion' not in sys.modules:
-    cme = types.ModuleType('CharMorphExpansion')
-    cme.__path__ = [parent_dir]
-    sys.modules['CharMorphExpansion'] = cme
+for pkg_name in ['CharMorphExpansion', 'Avatarmaker', 'Avicreator']:
+    if pkg_name not in sys.modules:
+        m = types.ModuleType(pkg_name)
+        m.__path__ = [parent_dir]
+        sys.modules[pkg_name] = m
 
 # Injected mock modules for headless testing
 for mod_name in ['addon_utils', 'rna_prop_ui', 'gpu', 'gpu_extras', 'idprop']:
