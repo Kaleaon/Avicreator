@@ -146,3 +146,65 @@ def test_laplacian_relaxation_smoothing_and_cap():
         assert v[2] >= 1.0 + 0.002 - 1e-6
 
     assert elapsed_ms < 120.0
+
+
+def test_layer_depth_index_assignment():
+    from lib.fitting import get_asset_layer_depth, Fitter
+
+    # Mock object with charmorph_layer_depth in data
+    class MockObj:
+        def __init__(self, layer_depth=None, category=None):
+            self.data = {}
+            if layer_depth is not None:
+                self.data["charmorph_layer_depth"] = layer_depth
+            self.conf = types.SimpleNamespace(config={"category": category} if category else {})
+
+    obj_explicit = MockObj(layer_depth=3)
+    assert get_asset_layer_depth(obj_explicit) == 3
+
+    obj_inner = MockObj(category="Underwear")
+    assert get_asset_layer_depth(obj_inner) == 1
+
+    obj_jacket = MockObj(category="Jacket / Outerwear")
+    assert get_asset_layer_depth(obj_jacket) == 3
+
+    obj_default = MockObj()
+    assert get_asset_layer_depth(obj_default) == 1
+
+
+def test_multi_layer_composite_collision_stack_and_refitting():
+    from lib.fitting import apply_surface_clearance_and_relaxation
+
+    # Base character body: cube of size 2.0 (surface at Z = 1.0)
+    char_geom = create_cube_geometry(scale=2.0)
+
+    # Inner shirt layer geometry (surface at Z = 1.1)
+    shirt_geom = create_cube_geometry(scale=2.2)
+
+    # Outer jacket verts (initial position at Z = 1.02, penetrating inner shirt)
+    jacket_verts = np.array([
+        [0.0, 0.0, 1.02],
+    ], dtype=np.float64)
+    jacket_faces = [(0, 0)]
+
+    # 1. clearance projection against base body only (without shirt in stack)
+    result_body_only = apply_surface_clearance_and_relaxation(
+        jacket_verts, jacket_faces, char_geom, min_clearance=0.002, max_relaxation_passes=0
+    )
+    # At Z=1.02, it is already > 1.002 relative to body, so remains 1.02
+    assert result_body_only[0][2] == pytest.approx(1.02)
+
+    # 2. clearance projection against composite collision stack (body + inner shirt)
+    composite_verts = np.vstack([char_geom.verts, shirt_geom.verts])
+    offset = len(char_geom.verts)
+    composite_faces = list(char_geom.faces) + [[vi + offset for vi in f] for f in shirt_geom.faces]
+    composite_geom = Geometry(composite_verts, composite_faces)
+    composite_geom.layer_geoms = [char_geom, shirt_geom]
+
+    result_composite = apply_surface_clearance_and_relaxation(
+        jacket_verts, jacket_faces, composite_geom, min_clearance=0.002, max_relaxation_passes=0
+    )
+
+    # Outer jacket must clear the inner shirt (Z >= 1.1 + 0.002 = 1.102)
+    assert result_composite[0][2] >= 1.102 - 1e-5
+
