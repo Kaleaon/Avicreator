@@ -207,4 +207,3 @@ def test_multi_layer_composite_collision_stack_and_refitting():
 
     # Outer jacket must clear the inner shirt (Z >= 1.1 + 0.002 = 1.102)
     assert result_composite[0][2] >= 1.102 - 1e-5
-
