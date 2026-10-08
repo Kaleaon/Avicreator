@@ -12,6 +12,10 @@ pub enum AssetCategory {
     Other(String),
 }
 
+fn default_layer_depth() -> u32 {
+    1
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AssetManifest {
     pub id: String,
@@ -20,6 +24,8 @@ pub struct AssetManifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
     pub category: AssetCategory,
+    #[serde(default = "default_layer_depth")]
+    pub layer_depth: u32,
     #[serde(default)]
     pub mesh_files: Vec<String>,
     #[serde(default)]
@@ -39,12 +45,21 @@ impl AssetManifest {
         category: AssetCategory,
         skeleton_type: impl Into<String>,
     ) -> Self {
+        let layer_depth = match &category {
+            AssetCategory::Character => 0,
+            AssetCategory::Clothing => 1,
+            AssetCategory::Hair => 2,
+            AssetCategory::Accessory => 3,
+            AssetCategory::Preset => 0,
+            AssetCategory::Other(_) => 1,
+        };
         Self {
             id: id.into(),
             name: name.into(),
             version: version.into(),
             author: None,
             category,
+            layer_depth,
             mesh_files: Vec::new(),
             morph_targets: Vec::new(),
             skeleton_type: skeleton_type.into(),

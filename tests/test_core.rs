@@ -79,6 +79,54 @@ fn test_morpher_performance_50k_vertices() {
 }
 
 #[test]
+fn test_multi_layer_collision_stack() {
+    use libavicreator::GarmentLayer;
+
+    // Base body: quad on z=0 plane
+    let body_verts = vec![
+        Vec3::new(-1.0, -1.0, 0.0),
+        Vec3::new( 1.0, -1.0, 0.0),
+        Vec3::new( 1.0,  1.0, 0.0),
+        Vec3::new(-1.0,  1.0, 0.0),
+    ];
+    let body_polys = vec![[0, 1, 2], [0, 2, 3]];
+    let mut fitter = Fitter::new(body_verts, &body_polys);
+
+    // Inner shirt (layer 1): parallel quad at z=0.10
+    let shirt_layer = GarmentLayer {
+        layer_depth: 1,
+        vertices: vec![
+            Vec3::new(-1.0, -1.0, 0.10),
+            Vec3::new( 1.0, -1.0, 0.10),
+            Vec3::new( 1.0,  1.0, 0.10),
+            Vec3::new(-1.0,  1.0, 0.10),
+        ],
+        polygons: vec![[0, 1, 2], [0, 2, 3]],
+    };
+    fitter.add_inner_layer(shirt_layer);
+
+    // Outer jacket (layer 2): asset vertex at (0.0, 0.0, 0.05) penetrating inner shirt
+    let jacket_verts = vec![Vec3::new(0.0, 0.0, 0.05)];
+    let mut config = libavicreator::FittingConfig::default();
+    config.min_clearance = 0.005;
+
+    let start = Instant::now();
+    let fitted = fitter.fit_asset_layer(&jacket_verts, &config, 2);
+    let latency = start.elapsed();
+
+    assert_eq!(fitted.len(), 1);
+    // Outer jacket must clear the inner shirt (z >= 0.10 + min_clearance)
+    assert!(
+        fitted[0].z >= 0.105 - 1e-4,
+        "Outer jacket vertex at z={} penetrated inner shirt at z=0.10",
+        fitted[0].z
+    );
+
+    // Clearance calculation latency under 50ms per layer
+    assert!(latency.as_millis() < 50, "Latency {:?} exceeded 50ms", latency);
+}
+
+#[test]
 fn test_fitter_and_rigging() {
     let body_verts = vec![
         Vec3::new(0.0, 0.0, 0.0),
