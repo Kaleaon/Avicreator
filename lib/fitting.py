@@ -194,41 +194,47 @@ def apply_surface_clearance_and_relaxation(
     Executes post-fitting BVH distance ray-cast check, surface clearance projection,
     and iterative Laplacian mesh relaxation in memory using NumPy buffer operations.
     """
-    if len(verts) == 0 or char_geom is None or getattr(char_geom, "bvh", None) is None:
+    if len(verts) == 0 or char_geom is None:
         return verts
 
+    layer_geoms = getattr(char_geom, "layer_geoms", [char_geom])
     masked_body_verts = masked_body_verts or set()
     num_verts = len(verts)
     adj_list = build_adjacency_list(asset_faces, num_verts)
-    bvh = char_geom.bvh
-    char_faces = char_geom.faces
+    base_faces = char_geom.faces
 
     # 1. Post-fitting BVH distance & ray-cast clearance check + outward normal projection
     projected_verts = verts.copy()
 
     for i in range(num_verts):
         co = projected_verts[i]
-        res = bvh.find_nearest(co.tolist())
-        if res is None or res[0] is None or res[2] is None:
-            continue
-        loc, normal, face_idx, dist = res[0], res[1], res[2], res[3]
+        for g_idx, geom in enumerate(layer_geoms):
+            bvh = geom.bvh
+            if bvh is None:
+                continue
+            res = bvh.find_nearest(co.tolist())
+            if res is None or res[0] is None or res[2] is None:
+                continue
+            loc, normal, face_idx = res[0], res[1], res[2]
 
-        c_face = char_faces[face_idx]
-        if masked_body_verts and all(vi in masked_body_verts for vi in c_face):
-            continue
+            if g_idx == 0:
+                c_face = base_faces[face_idx] if face_idx < len(base_faces) else ()
+                if masked_body_verts and all(vi in masked_body_verts for vi in c_face):
+                    continue
 
-        norm = numpy.array(normal, dtype=numpy.float64)
-        norm_len = numpy.linalg.norm(norm)
-        if norm_len > 1e-12:
-            norm /= norm_len
-        else:
-            continue
+            norm = numpy.array(normal, dtype=numpy.float64)
+            norm_len = numpy.linalg.norm(norm)
+            if norm_len > 1e-12:
+                norm /= norm_len
+            else:
+                continue
 
-        v_vec = co - numpy.array(loc, dtype=numpy.float64)
-        signed_dist = float(numpy.dot(v_vec, norm))
+            v_vec = co - numpy.array(loc, dtype=numpy.float64)
+            signed_dist = float(numpy.dot(v_vec, norm))
 
-        if signed_dist < min_clearance:
-            projected_verts[i] = numpy.array(loc, dtype=numpy.float64) + norm * min_clearance
+            if signed_dist < min_clearance:
+                co = numpy.array(loc, dtype=numpy.float64) + norm * min_clearance
+                projected_verts[i] = co
 
     # 2. Iterative Laplacian mesh relaxation (capped at max 5 passes)
     relaxation_passes = min(max_relaxation_passes, 5)
@@ -244,10 +250,16 @@ def apply_surface_clearance_and_relaxation(
             avg_co = numpy.mean(curr_verts[adj], axis=0)
             smoothed_co = 0.5 * curr_verts[i] + 0.5 * avg_co
 
-            res = bvh.find_nearest(smoothed_co.tolist())
-            if res is not None and res[0] is not None and res[2] is not None:
-                c_face = char_faces[res[2]]
-                if not (masked_body_verts and all(vi in masked_body_verts for vi in c_face)):
+            for g_idx, geom in enumerate(layer_geoms):
+                bvh = geom.bvh
+                if bvh is None:
+                    continue
+                res = bvh.find_nearest(smoothed_co.tolist())
+                if res is not None and res[0] is not None and res[2] is not None:
+                    if g_idx == 0:
+                        c_face = base_faces[res[2]] if res[2] < len(base_faces) else ()
+                        if masked_body_verts and all(vi in masked_body_verts for vi in c_face):
+                            continue
                     norm = numpy.array(res[1], dtype=numpy.float64)
                     norm_len = numpy.linalg.norm(norm)
                     if norm_len > 1e-12:
@@ -264,6 +276,33 @@ def apply_surface_clearance_and_relaxation(
     return curr_verts
 
 
+def get_asset_layer_depth(obj_or_afd) -> int:
+    obj = getattr(obj_or_afd, "obj", obj_or_afd)
+    if hasattr(obj, "data") and obj.data and "charmorph_layer_depth" in obj.data:
+        return int(obj.data["charmorph_layer_depth"])
+    if hasattr(obj, "get") and obj.get("charmorph_layer_depth") is not None:
+        return int(obj["charmorph_layer_depth"])
+    if hasattr(obj_or_afd, "conf"):
+        conf = obj_or_afd.conf
+        if hasattr(conf, "layer_depth") and conf.layer_depth is not None:
+            return int(conf.layer_depth)
+        if hasattr(conf, "config") and isinstance(conf.config, dict):
+            if "layer_depth" in conf.config:
+                return int(conf.config["layer_depth"])
+            if "layer" in conf.config:
+                return int(conf.config["layer"])
+            cat = str(conf.config.get("category", "")).lower()
+            if "underwear" in cat or "inner" in cat:
+                return 1
+            if "top" in cat or "bottom" in cat or "shirt" in cat or "pants" in cat or "clothing" in cat:
+                return 2
+            if "jacket" in cat or "coat" in cat or "outer" in cat or "overgarment" in cat:
+                return 3
+            if "accessory" in cat or "suit" in cat:
+                return 4
+    return 1
+
+
 class EmptyAsset:
     author = ""
     license = ""
@@ -278,6 +317,54 @@ class Fitter(hair.HairFitter):
         super().__init__(morpher.core)
         self.morpher = morpher
         self.bind_cache = {}
+
+    def get_composite_collision_stack(self, afd) -> fit_calc.Geometry:
+        base_geom = self.get_char_geom(afd)
+        if not afd or not getattr(afd, "obj", None):
+            return base_geom
+
+        target_layer = get_asset_layer_depth(afd)
+        inner_assets = []
+        for other_afd in self.get_assets():
+            if other_afd is afd or not getattr(other_afd, "obj", None):
+                continue
+            if getattr(other_afd, "obj") is getattr(afd, "obj"):
+                continue
+            other_layer = get_asset_layer_depth(other_afd)
+            if other_layer < target_layer:
+                inner_assets.append((other_layer, other_afd))
+
+        if not inner_assets:
+            return base_geom
+
+        inner_assets.sort(key=lambda x: x[0])
+
+        layer_geoms = [base_geom]
+        all_verts = [base_geom.verts]
+        all_faces = [list(f) for f in base_geom.faces]
+        curr_offset = len(base_geom.verts)
+
+        for _, inner_afd in inner_assets:
+            inner_verts = None
+            if hasattr(inner_afd.obj, "data") and hasattr(inner_afd.obj.data, "vertices") and len(inner_afd.obj.data.vertices) > 0:
+                try:
+                    inner_verts = numpy.array([v.co for v in inner_afd.obj.data.vertices], dtype=numpy.float64)
+                except Exception:
+                    pass
+            if inner_verts is None and hasattr(inner_afd, "geom") and inner_afd.geom is not None:
+                inner_verts = inner_afd.geom.verts
+
+            if inner_verts is not None and hasattr(inner_afd, "geom") and inner_afd.geom is not None:
+                layer_geoms.append(fit_calc.Geometry(inner_verts, list(inner_afd.geom.faces)))
+                all_verts.append(inner_verts)
+                for f in inner_afd.geom.faces:
+                    all_faces.append([vi + curr_offset for vi in f])
+                curr_offset += len(inner_verts)
+
+        composite_verts = numpy.vstack(all_verts)
+        comp_geom = fit_calc.Geometry(composite_verts, all_faces)
+        comp_geom.layer_geoms = layer_geoms
+        return comp_geom
 
     def add_mask_from_asset(self, afd: fit_calc.AssetFitData):
         vg_name = mask_name(afd.obj)
@@ -486,7 +573,7 @@ class Fitter(hair.HairFitter):
         verts = afd.binding.fit(self.get_diff_arr(afd.morph))
         verts += afd.geom.verts
 
-        char_geom = self.get_char_geom(afd)
+        char_geom = self.get_composite_collision_stack(afd)
         masked_body_verts = self.get_masked_verts()
         verts = apply_surface_clearance_and_relaxation(
             verts, afd.geom.faces, char_geom,
@@ -504,6 +591,9 @@ class Fitter(hair.HairFitter):
 
     def _fit_new_item(self, asset):
         afd = self._get_asset_data(asset)
+        ld = get_asset_layer_depth(afd)
+        if hasattr(afd.obj, "data") and afd.obj.data is not None:
+            afd.obj.data["charmorph_layer_depth"] = ld
         if self.children is not None:
             self.children.append(afd)
         asset.parent = self.mcore.obj
@@ -591,7 +681,8 @@ class Fitter(hair.HairFitter):
         hair_deform = bpy.context.window_manager.charmorph_ui.hair_deform
         if hair_deform:
             self.fit_obj_hair(self.mcore.obj)
-        for afd in self.get_assets():
+        assets = sorted(self.get_assets(), key=get_asset_layer_depth)
+        for afd in assets:
             self.fit(afd)
             if hair_deform:
                 self.fit_obj_hair(afd.obj)
