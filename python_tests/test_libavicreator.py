@@ -191,5 +191,3 @@ def test_json_base_mesh_loading(tmp_path):
 
     loaded_dir = load_dir(str(tmp_path))
     assert "JsonHero" in loaded_dir
-
-
