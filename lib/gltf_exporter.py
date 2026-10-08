@@ -61,10 +61,11 @@ def _compute_normals(positions: np.ndarray, triangle_indices: np.ndarray) -> np.
     return normals.astype(np.float32)
 
 
-def extract_export_mesh_data(mesh_obj_or_data, armature_obj_or_data=None):
+def extract_export_mesh_data(mesh_obj_or_data, armature_obj_or_data=None, targets=None):
     """
     Extract normalized vertex arrays (positions, normals, uvs, joint_indices, skin_weights)
-    and joint hierarchy from mesh/armature objects (BaseMesh, Blender Object, or Dict).
+    and joint hierarchy from mesh/armature objects (BaseMesh, Blender Object, or Dict),
+    plus morph target position deltas.
     """
     positions = None
     faces = None
@@ -72,6 +73,7 @@ def extract_export_mesh_data(mesh_obj_or_data, armature_obj_or_data=None):
     uvs = None
     bones_dict = {}
     weight_layers = {}
+    targets_list = list(targets) if targets is not None else []
 
     # 1. BaseMesh / XMLBaseMesh instance
     if isinstance(mesh_obj_or_data, xml_base_mesh.BaseMesh):
@@ -111,6 +113,43 @@ def extract_export_mesh_data(mesh_obj_or_data, armature_obj_or_data=None):
         if hasattr(data, "vertices") and hasattr(data.vertices[0], "normal"):
             normals = np.array([v.normal for v in data.vertices], dtype=np.float32)
 
+        # Extract shape keys / morph targets if present
+        if not targets_list and hasattr(data, "shape_keys") and data.shape_keys and hasattr(data.shape_keys, "key_blocks") and data.shape_keys.key_blocks:
+            key_blocks = data.shape_keys.key_blocks
+            ref_key = getattr(data.shape_keys, "reference_key", None)
+            if ref_key is None and len(key_blocks) > 0:
+                ref_key = key_blocks[0]
+
+            basis_pos = None
+            if ref_key is not None and hasattr(ref_key, "data"):
+                try:
+                    if hasattr(utils, "verts_to_numpy"):
+                        basis_pos = utils.verts_to_numpy(ref_key.data)
+                    else:
+                        basis_pos = np.array([v.co for v in ref_key.data], dtype=np.float32)
+                except Exception:
+                    basis_pos = None
+
+            if basis_pos is None:
+                basis_pos = positions
+
+            for sk in key_blocks:
+                sk_name = getattr(sk, "name", "target")
+                if sk == ref_key or sk_name.lower() in ("basis", "basis shape"):
+                    continue
+                if hasattr(sk, "data"):
+                    try:
+                        if hasattr(utils, "verts_to_numpy"):
+                            sk_pos = utils.verts_to_numpy(sk.data)
+                        else:
+                            sk_pos = np.array([v.co for v in sk.data], dtype=np.float32)
+
+                        if len(sk_pos) == len(basis_pos):
+                            delta = sk_pos - basis_pos
+                            targets_list.append({"name": sk_name, "positions": delta.astype(np.float32)})
+                    except Exception:
+                        pass
+
         # Handle vertex group weights
         if hasattr(obj, "vertex_groups") and hasattr(data, "vertices"):
             vgs = {vg.index: vg.name for vg in obj.vertex_groups}
@@ -136,6 +175,32 @@ def extract_export_mesh_data(mesh_obj_or_data, armature_obj_or_data=None):
         uvs = np.asarray(d.get("uvs"), dtype=np.float32) if "uvs" in d else None
         if "bones" in d:
             bones_dict = d["bones"]
+
+        if not targets_list:
+            raw_targets = d.get("targets") or d.get("morph_targets") or d.get("shape_keys")
+            if raw_targets:
+                if isinstance(raw_targets, dict):
+                    for name, val in raw_targets.items():
+                        arr = np.asarray(val, dtype=np.float32)
+                        if arr.shape == positions.shape:
+                            targets_list.append({"name": str(name), "positions": arr})
+                elif isinstance(raw_targets, list):
+                    for t in raw_targets:
+                        if isinstance(t, dict):
+                            t_name = t.get("name", "target")
+                            arr = None
+                            if "deltas" in t:
+                                arr = np.asarray(t["deltas"], dtype=np.float32)
+                            elif "positions_delta" in t:
+                                arr = np.asarray(t["positions_delta"], dtype=np.float32)
+                            elif "positions" in t:
+                                t_pos = np.asarray(t["positions"], dtype=np.float32)
+                                if t_pos.shape == positions.shape:
+                                    arr = t_pos - positions
+                                else:
+                                    arr = t_pos
+                            if arr is not None and arr.shape == positions.shape:
+                                targets_list.append({"name": str(t_name), "positions": arr.astype(np.float32)})
 
     if positions is None:
         positions = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
@@ -220,14 +285,15 @@ def extract_export_mesh_data(mesh_obj_or_data, armature_obj_or_data=None):
         "skin_weights": skin_weights.astype(np.float32),
         "joint_names": joint_names,
         "bones_dict": bones_dict,
+        "targets": targets_list,
     }
 
 
-def export_gltf_standalone(filepath, mesh_data, armature_data=None, format="glb"):
+def export_gltf_standalone(filepath, mesh_data, armature_data=None, format="glb", targets=None):
     """
     Export mesh and armature data to glTF 2.0 (.glb or .gltf + .bin) without calling Blender APIs.
     """
-    extracted = extract_export_mesh_data(mesh_data, armature_data)
+    extracted = extract_export_mesh_data(mesh_data, armature_data, targets=targets)
 
     positions = extracted["positions"]
     normals = extracted["normals"]
@@ -237,6 +303,7 @@ def export_gltf_standalone(filepath, mesh_data, armature_data=None, format="glb"
     weights = extracted["skin_weights"]
     joint_names = extracted["joint_names"]
     bones_dict = extracted["bones_dict"]
+    extracted_targets = extracted.get("targets", [])
 
     num_verts = len(positions)
     num_indices = len(indices)
@@ -315,6 +382,18 @@ def export_gltf_standalone(filepath, mesh_data, armature_data=None, format="glb"
     # 6. Weights Accessor
     bv_weights = _add_buffer_view(weights.tobytes(), target=34962)
     acc_weights = _add_accessor(bv_weights, 5126, "VEC4", num_verts)  # FLOAT
+
+    # 7. Morph Targets Accessors
+    gltf_targets = []
+    target_names = []
+    for t in extracted_targets:
+        t_pos = t["positions"].astype(np.float32)
+        pos_min = [float(x) for x in np.min(t_pos, axis=0)]
+        pos_max = [float(x) for x in np.max(t_pos, axis=0)]
+        bv_target = _add_buffer_view(t_pos.tobytes(), target=34962)
+        acc_target = _add_accessor(bv_target, 5126, "VEC3", num_verts, min_val=pos_min, max_val=pos_max)
+        gltf_targets.append({"POSITION": acc_target})
+        target_names.append(t["name"])
 
     # Build Nodes & Skin
     nodes = []
@@ -396,6 +475,16 @@ def export_gltf_standalone(filepath, mesh_data, armature_data=None, format="glb"
         "attributes": attributes,
         "indices": acc_indices
     }
+    if gltf_targets:
+        mesh_primitive["targets"] = gltf_targets
+
+    mesh_obj = {
+        "name": "CharacterMesh",
+        "primitives": [mesh_primitive]
+    }
+    if target_names:
+        mesh_obj["extras"] = {"targetNames": target_names}
+        mesh_obj["weights"] = [0.0] * len(target_names)
 
     gltf_json = {
         "asset": {
@@ -410,12 +499,7 @@ def export_gltf_standalone(filepath, mesh_data, armature_data=None, format="glb"
             }
         ],
         "nodes": nodes,
-        "meshes": [
-            {
-                "name": "CharacterMesh",
-                "primitives": [mesh_primitive]
-            }
-        ],
+        "meshes": [mesh_obj],
         "accessors": accessors,
         "bufferViews": buffer_views,
         "buffers": [
@@ -467,7 +551,7 @@ def export_gltf_standalone(filepath, mesh_data, armature_data=None, format="glb"
             f_glb.write(buffer_bytes)
 
 
-def export_gltf(filepath, mesh_obj_or_data, armature_obj_or_data=None, format="glb", bake_shape_keys=True):
+def export_gltf(filepath, mesh_obj_or_data, armature_obj_or_data=None, format="glb", bake_shape_keys=True, targets=None):
     """
     Main entry point for glTF export.
     Supports both Blender runtime contexts and standalone Python environments.
@@ -478,7 +562,7 @@ def export_gltf(filepath, mesh_obj_or_data, armature_obj_or_data=None, format="g
         except Exception:
             pass
 
-    export_gltf_standalone(filepath, mesh_obj_or_data, armature_obj_or_data, format)
+    export_gltf_standalone(filepath, mesh_obj_or_data, armature_obj_or_data, format, targets=targets)
 
 
 def file_io_bake_module():

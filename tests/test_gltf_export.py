@@ -120,3 +120,97 @@ def test_shape_key_flattening_without_mutation():
 
     assert result is obj
     # shape_key_remove was not called (which would have raised RuntimeError)
+
+
+def test_gltf_export_morph_targets():
+    """Verify morph targets are extracted and serialized into glTF targets and extras.targetNames."""
+    verts = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ], dtype=np.float32)
+    faces = [(0, 1, 2), (0, 2, 3)]
+
+    target1_deltas = np.array([
+        [0.1, 0.0, 0.0],
+        [0.0, 0.2, 0.0],
+        [0.0, 0.0, 0.3],
+        [0.1, 0.1, 0.1],
+    ], dtype=np.float32)
+
+    target2_deltas = np.array([
+        [-0.1, 0.0, 0.0],
+        [0.0, -0.2, 0.0],
+        [0.0, 0.0, -0.3],
+        [-0.1, -0.1, -0.1],
+    ], dtype=np.float32)
+
+    mesh_dict = {
+        "positions": verts,
+        "faces": faces,
+        "targets": [
+            {"name": "Smile", "deltas": target1_deltas},
+            {"name": "Frown", "deltas": target2_deltas},
+        ]
+    }
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        gltf_path = os.path.join(tmpdir, "morphed.gltf")
+        bin_path = os.path.join(tmpdir, "morphed.bin")
+
+        gltf_exporter.export_gltf(gltf_path, mesh_dict, format="gltf", bake_shape_keys=False)
+
+        assert os.path.exists(gltf_path)
+        assert os.path.exists(bin_path)
+
+        with open(gltf_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        primitive = data["meshes"][0]["primitives"][0]
+        assert "targets" in primitive
+        assert len(primitive["targets"]) == 2
+        assert "POSITION" in primitive["targets"][0]
+        assert "POSITION" in primitive["targets"][1]
+
+        extras = data["meshes"][0].get("extras", {})
+        assert "targetNames" in extras
+        assert extras["targetNames"] == ["Smile", "Frown"]
+
+        # Check target accessor min/max
+        acc0_idx = primitive["targets"][0]["POSITION"]
+        acc0 = data["accessors"][acc0_idx]
+        assert "min" in acc0 and "max" in acc0
+        assert acc0["componentType"] == 5126  # FLOAT
+        assert acc0["type"] == "VEC3"
+
+        # Validate with node gltf-validator if available
+        node_validator = "/tmp/node_modules/gltf-validator/index.js"
+        if os.path.exists(node_validator):
+            res = subprocess.run(["node", node_validator, gltf_path], capture_output=True, text=True)
+            assert res.returncode == 0, f"glTF Validator failed for morphed GLTF: {res.stdout}\n{res.stderr}"
+
+
+def test_gltf_export_skinning_attributes():
+    """Verify skinning attributes (JOINTS_0, WEIGHTS_0) and skin hierarchy are written."""
+    base_mesh_path = os.path.join(os.path.dirname(__file__), "..", "base_meshes", "HumanoidNeutral.xml")
+    if not os.path.exists(base_mesh_path):
+        pytest.skip("Base mesh XML file not found")
+
+    bm = xml_base_mesh.load_base_mesh(base_mesh_path)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        gltf_path = os.path.join(tmpdir, "skinned.gltf")
+        gltf_exporter.export_gltf(gltf_path, bm, format="gltf")
+
+        with open(gltf_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        attrs = data["meshes"][0]["primitives"][0]["attributes"]
+        assert "JOINTS_0" in attrs
+        assert "WEIGHTS_0" in attrs
+        assert "skins" in data
+        assert len(data["skins"]) > 0
+        assert "inverseBindMatrices" in data["skins"][0]
+        assert "joints" in data["skins"][0]
+
