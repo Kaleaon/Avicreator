@@ -1,3 +1,7 @@
+use crate::spatial::{
+    calculate_enclosed_volume, calculate_surface_normals, calculate_volume_and_center,
+    calculate_volumetric_center, CotangentLaplacianCache,
+};
 use glam::Vec3;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -81,16 +85,47 @@ pub struct Morpher {
     pub morphs: HashMap<String, MorphTarget>,
     pub weights: HashMap<String, f32>,
     pub clamp: bool,
+    pub enable_relaxation: bool,
+    pub relaxation_factor: f32,
+    pub max_iterations: usize,
+    pub convergence_threshold: f32,
+    pub laplacian_cache: Option<CotangentLaplacianCache>,
 }
 
 impl Morpher {
     pub fn new(base_mesh: BaseMesh) -> Self {
+        let laplacian_cache = if !base_mesh.polygons.is_empty() {
+            Some(CotangentLaplacianCache::build(
+                &base_mesh.vertices,
+                &base_mesh.polygons,
+            ))
+        } else {
+            None
+        };
+
         Self {
             base_mesh,
             morphs: HashMap::new(),
             weights: HashMap::new(),
             clamp: true,
+            enable_relaxation: true,
+            relaxation_factor: 0.5,
+            max_iterations: 5,
+            convergence_threshold: 1e-4,
+            laplacian_cache,
         }
+    }
+
+    pub fn set_base_mesh(&mut self, base_mesh: BaseMesh) {
+        self.laplacian_cache = if !base_mesh.polygons.is_empty() {
+            Some(CotangentLaplacianCache::build(
+                &base_mesh.vertices,
+                &base_mesh.polygons,
+            ))
+        } else {
+            None
+        };
+        self.base_mesh = base_mesh;
     }
 
     pub fn add_morph(&mut self, morph: MorphTarget) {
@@ -120,7 +155,7 @@ impl Morpher {
     }
 
     /// Evaluates morph deltas and returns updated 3D vertex positions.
-    /// Uses parallel iteration over vertices for sub-millisecond evaluation on 50k+ vertices.
+    /// Applies post-evaluation Cotangent Laplacian relaxation with volume preservation.
     pub fn evaluate(&self) -> Vec<Vec3> {
         let num_verts = self.base_mesh.vertices.len();
         let mut result = self.base_mesh.vertices.clone();
@@ -139,44 +174,123 @@ impl Morpher {
             })
             .collect();
 
-        if active_morphs.is_empty() {
-            return result;
-        }
-
-        // Apply sparse deltas directly
-        for (target, weight) in &active_morphs {
-            match &target.delta {
-                MorphDelta::Sparse(deltas) => {
-                    for delta in deltas {
-                        if delta.vertex_index < num_verts {
-                            result[delta.vertex_index] += delta.offset * (*weight);
+        if !active_morphs.is_empty() {
+            // Apply sparse deltas directly
+            for (target, weight) in &active_morphs {
+                match &target.delta {
+                    MorphDelta::Sparse(deltas) => {
+                        for delta in deltas {
+                            if delta.vertex_index < num_verts {
+                                result[delta.vertex_index] += delta.offset * (*weight);
+                            }
                         }
                     }
+                    MorphDelta::Dense(_) => {}
                 }
-                MorphDelta::Dense(_) => {}
+            }
+
+            // Parallel dense morph combination over vertex chunks
+            let dense_active: Vec<(&[Vec3], f32)> = active_morphs
+                .iter()
+                .filter_map(|(target, w)| match &target.delta {
+                    MorphDelta::Dense(deltas) if deltas.len() == num_verts => {
+                        Some((deltas.as_slice(), *w))
+                    }
+                    _ => None,
+                })
+                .collect();
+
+            if !dense_active.is_empty() {
+                result.par_iter_mut().enumerate().for_each(|(i, v)| {
+                    let mut acc = Vec3::ZERO;
+                    for (deltas, weight) in &dense_active {
+                        acc += deltas[i] * (*weight);
+                    }
+                    *v += acc;
+                });
             }
         }
 
-        // Parallel dense morph combination over vertex chunks
-        let dense_active: Vec<(&[Vec3], f32)> = active_morphs
-            .iter()
-            .filter_map(|(target, w)| match &target.delta {
-                MorphDelta::Dense(deltas) if deltas.len() == num_verts => Some((deltas.as_slice(), *w)),
-                _ => None,
-            })
-            .collect();
-
-        if !dense_active.is_empty() {
-            result.par_iter_mut().enumerate().for_each(|(i, v)| {
-                let mut acc = Vec3::ZERO;
-                for (deltas, weight) in &dense_active {
-                    acc += deltas[i] * (*weight);
-                }
-                *v += acc;
-            });
+        // Apply post-evaluation Cotangent Laplacian relaxation pass
+        if self.enable_relaxation && !self.base_mesh.polygons.is_empty() {
+            self.relax(&mut result);
         }
 
         result
+    }
+
+    /// Performs Cotangent Laplacian relaxation with iterative volume-preservation constraint.
+    pub fn relax(&self, vertices: &mut Vec<Vec3>) {
+        if !self.enable_relaxation
+            || self.max_iterations == 0
+            || self.base_mesh.polygons.is_empty()
+            || vertices.is_empty()
+        {
+            return;
+        }
+
+        let cache = match &self.laplacian_cache {
+            Some(c) => c,
+            None => return,
+        };
+
+        let target_vol = calculate_enclosed_volume(vertices, &self.base_mesh.polygons);
+        if target_vol <= 1e-8 {
+            return;
+        }
+
+        let num_verts = vertices.len();
+
+        cache.with_scratch_buffer(|laplacian_step| {
+            for _pass in 0..self.max_iterations {
+                cache.compute_laplacian_vectors(vertices, laplacian_step);
+
+                let mut max_move_sq: f32 = 0.0;
+                for i in 0..num_verts {
+                    let shift = unsafe { *laplacian_step.get_unchecked(i) } * self.relaxation_factor;
+                    let move_sq = shift.length_squared();
+                    if move_sq > max_move_sq {
+                        max_move_sq = move_sq;
+                    }
+                    unsafe {
+                        *vertices.get_unchecked_mut(i) += shift;
+                    }
+                }
+
+                // Volume preservation penalty constraint
+                let (current_vol, vol_center) =
+                    calculate_volume_and_center(vertices, &self.base_mesh.polygons);
+
+                if current_vol > 1e-8 {
+                    let scale = (target_vol / current_vol).cbrt();
+                    vertices.par_iter_mut().for_each(|v| {
+                        *v = vol_center + (*v - vol_center) * scale;
+                    });
+                }
+
+                let vol_divergence = ((current_vol - target_vol) / target_vol).abs();
+                if max_move_sq.sqrt() < self.convergence_threshold
+                    && vol_divergence < self.convergence_threshold
+                {
+                    break;
+                }
+            }
+        });
+    }
+
+    /// Computes enclosed 3D mesh volume for a vertex buffer.
+    pub fn calculate_volume(&self, vertices: &[Vec3]) -> f32 {
+        calculate_enclosed_volume(vertices, &self.base_mesh.polygons)
+    }
+
+    /// Computes volumetric center for a vertex buffer.
+    pub fn calculate_volumetric_center(&self, vertices: &[Vec3]) -> Vec3 {
+        calculate_volumetric_center(vertices, &self.base_mesh.polygons)
+    }
+
+    /// Computes vertex surface normals for a vertex buffer.
+    pub fn calculate_surface_normals(&self, vertices: &[Vec3]) -> Vec<Vec3> {
+        calculate_surface_normals(vertices, &self.base_mesh.polygons)
     }
 
     /// Linear interpolation / continuous mix factor between preset weight vectors

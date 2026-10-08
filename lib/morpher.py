@@ -152,6 +152,14 @@ class Morpher:
         if hasattr(drivers, "mute_inactive_shape_keys"):
             drivers.mute_inactive_shape_keys(self.core.obj)
         self.fitter.refit_all()
+        if hasattr(self.core, "get_volumetric_center") and hasattr(self.core, "get_volume"):
+            try:
+                vc = self.core.get_volumetric_center()
+                vol = self.core.get_volume()
+                normals = self.core.get_surface_normals() if hasattr(self.core, "get_surface_normals") else None
+                self.sj_calc.update_volumetric_metrics(volumetric_center=vc, mesh_volume=vol, surface_normals=normals)
+            except Exception as e:
+                logger.debug("Could not sample volumetric metrics: %s", e)
         self.sj_calc.recalc()
         self.update_rig()
 
