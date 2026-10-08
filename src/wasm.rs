@@ -7,6 +7,52 @@ use crate::{
     morpher::{BaseMesh, MorphTarget, Morpher, SparseDelta},
     spatial::BVHTree,
 };
+#[cfg(feature = "wasm")]
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "wasm")]
+#[derive(Serialize, Deserialize)]
+pub struct WasmRayHit {
+    pub hit: bool,
+    pub point: [f32; 3],
+    pub normal: [f32; 3],
+    pub face_index: u32,
+    pub distance: f32,
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+pub fn raycast_mesh(
+    positions: &[f32],
+    polys_flat: &[u32],
+    origin_x: f32,
+    origin_y: f32,
+    origin_z: f32,
+    dir_x: f32,
+    dir_y: f32,
+    dir_z: f32,
+) -> Option<Vec<f32>> {
+    let mut verts = Vec::with_capacity(positions.len() / 3);
+    for chunk in positions.chunks_exact(3) {
+        verts.push(Vec3::new(chunk[0], chunk[1], chunk[2]));
+    }
+    let mut polys = Vec::with_capacity(polys_flat.len() / 3);
+    for chunk in polys_flat.chunks_exact(3) {
+        polys.push([chunk[0] as usize, chunk[1] as usize, chunk[2] as usize]);
+    }
+    let bvh = BVHTree::FromPolygons(&verts, &polys);
+    let hit = bvh.ray_cast(
+        Vec3::new(origin_x, origin_y, origin_z),
+        Vec3::new(dir_x, dir_y, dir_z),
+        f32::INFINITY,
+    )?;
+    Some(vec![
+        hit.point.x, hit.point.y, hit.point.z,
+        hit.normal.x, hit.normal.y, hit.normal.z,
+        hit.face_index as f32,
+        hit.distance,
+    ])
+}
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen]
