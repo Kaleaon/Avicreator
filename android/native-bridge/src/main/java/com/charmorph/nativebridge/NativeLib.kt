@@ -5,7 +5,11 @@ import java.nio.ByteBuffer
 class NativeLib {
     companion object {
         init {
-            System.loadLibrary("charmorph-native")
+            try {
+                System.loadLibrary("charmorph-native")
+            } catch (e: UnsatisfiedLinkError) {
+                // Native library not loaded in desktop unit tests
+            }
         }
     }
 
