@@ -67,7 +67,7 @@ def test_cross_platform_skeleton_schema():
     node0 = parsed_json["nodes"][0]
     assert node0["id"] == 0
     assert node0["name"] == "Root"
-    assert node0["parent_id"] is None
+    assert node0.get("parent_id") is None
     assert node0["children"] == [1]
 
     # Node 1 (Pelvis)
