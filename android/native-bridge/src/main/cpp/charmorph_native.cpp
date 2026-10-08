@@ -8,6 +8,13 @@
 #define LOG_TAG "CharMorphNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
+// Declarations for avicreator-ffi Rust exports
+extern "C" {
+    char* avicreator_parse_skeleton_json(const char* json_str);
+    char* avicreator_parse_manifest_json(const char* json_str);
+    void avicreator_free_string(char* s);
+}
+
 // Simple struct to hold morph target data
 struct MorphTarget {
     std::vector<int> indices; // Sparse indices
@@ -148,5 +155,35 @@ Java_com_charmorph_nativebridge_NativeLib_solveMorphWeights(
     std::vector<float> resultWeights(morphCount, 0.5f);
     jfloatArray result = env->NewFloatArray(morphCount);
     env->SetFloatArrayRegion(result, 0, morphCount, resultWeights.data());
+    return result;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_charmorph_nativebridge_NativeLib_parseSkeletonJsonNative(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring jsonStr) {
+    if (!jsonStr) return nullptr;
+    const char* nativeString = env->GetStringUTFChars(jsonStr, 0);
+    char* parsed = avicreator_parse_skeleton_json(nativeString);
+    env->ReleaseStringUTFChars(jsonStr, nativeString);
+    if (!parsed) return nullptr;
+    jstring result = env->NewStringUTF(parsed);
+    avicreator_free_string(parsed);
+    return result;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_charmorph_nativebridge_NativeLib_parseManifestJsonNative(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring jsonStr) {
+    if (!jsonStr) return nullptr;
+    const char* nativeString = env->GetStringUTFChars(jsonStr, 0);
+    char* parsed = avicreator_parse_manifest_json(nativeString);
+    env->ReleaseStringUTFChars(jsonStr, nativeString);
+    if (!parsed) return nullptr;
+    jstring result = env->NewStringUTF(parsed);
+    avicreator_free_string(parsed);
     return result;
 }

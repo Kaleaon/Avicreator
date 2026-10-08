@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use crate::{
     fitting::{FittingConfig, Fitter},
     morpher::{BaseMesh, MorphTarget, Morpher, SparseDelta},
-    rigging::{Bone, BonePose, Skeleton, VertexWeight},
+    rigging::{Bone, BonePose, Skeleton as RiggingSkeleton, VertexWeight},
     spatial::{BVHTree, KDTree},
 };
 
@@ -277,7 +277,7 @@ impl PyRigger {
         poses: Option<HashMap<String, [f32; 3]>>,
     ) -> Bound<'py, PyArray2<f32>> {
         let vec3_verts: Vec<Vec3> = vertices.iter().map(|v| Vec3::from_slice(v)).collect();
-        let skeleton = Skeleton::new(self.bones.clone());
+        let skeleton = RiggingSkeleton::new(self.bones.clone());
 
         let mut pose_map = HashMap::new();
         if let Some(p_map) = poses {
@@ -313,6 +313,245 @@ impl PyRigger {
 }
 
 #[cfg(feature = "python")]
+use avicreator_schema::{AssetCategory, AssetManifest, Skeleton, SkeletonNode};
+
+#[cfg(feature = "python")]
+#[pyclass(name = "AssetManifest")]
+pub struct PyAssetManifest {
+    pub inner: AssetManifest,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyAssetManifest {
+    #[new]
+    #[pyo3(signature = (id, name, version, category="character", skeleton_type="biped"))]
+    pub fn new(
+        id: &str,
+        name: &str,
+        version: &str,
+        category: &str,
+        skeleton_type: &str,
+    ) -> Self {
+        let cat = match category.to_lowercase().as_str() {
+            "character" => AssetCategory::Character,
+            "clothing" => AssetCategory::Clothing,
+            "hair" => AssetCategory::Hair,
+            "preset" => AssetCategory::Preset,
+            "accessory" => AssetCategory::Accessory,
+            other => AssetCategory::Other(other.to_string()),
+        };
+        let inner = AssetManifest::new(id, name, version, cat, skeleton_type);
+        Self { inner }
+    }
+
+    #[getter]
+    pub fn id(&self) -> String {
+        self.inner.id.clone()
+    }
+
+    #[setter]
+    pub fn set_id(&mut self, val: String) {
+        self.inner.id = val;
+    }
+
+    #[getter]
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+
+    #[setter]
+    pub fn set_name(&mut self, val: String) {
+        self.inner.name = val;
+    }
+
+    #[getter]
+    pub fn version(&self) -> String {
+        self.inner.version.clone()
+    }
+
+    #[setter]
+    pub fn set_version(&mut self, val: String) {
+        self.inner.version = val;
+    }
+
+    #[getter]
+    pub fn author(&self) -> Option<String> {
+        self.inner.author.clone()
+    }
+
+    #[setter]
+    pub fn set_author(&mut self, val: Option<String>) {
+        self.inner.author = val;
+    }
+
+    #[getter]
+    pub fn category(&self) -> String {
+        match &self.inner.category {
+            AssetCategory::Character => "character".to_string(),
+            AssetCategory::Clothing => "clothing".to_string(),
+            AssetCategory::Hair => "hair".to_string(),
+            AssetCategory::Preset => "preset".to_string(),
+            AssetCategory::Accessory => "accessory".to_string(),
+            AssetCategory::Other(s) => s.clone(),
+        }
+    }
+
+    #[setter]
+    pub fn set_category(&mut self, val: &str) {
+        self.inner.category = match val.to_lowercase().as_str() {
+            "character" => AssetCategory::Character,
+            "clothing" => AssetCategory::Clothing,
+            "hair" => AssetCategory::Hair,
+            "preset" => AssetCategory::Preset,
+            "accessory" => AssetCategory::Accessory,
+            other => AssetCategory::Other(other.to_string()),
+        };
+    }
+
+    #[getter]
+    pub fn skeleton_type(&self) -> String {
+        self.inner.skeleton_type.clone()
+    }
+
+    #[setter]
+    pub fn set_skeleton_type(&mut self, val: String) {
+        self.inner.skeleton_type = val;
+    }
+
+    #[getter]
+    pub fn mesh_files(&self) -> Vec<String> {
+        self.inner.mesh_files.clone()
+    }
+
+    #[setter]
+    pub fn set_mesh_files(&mut self, files: Vec<String>) {
+        self.inner.mesh_files = files;
+    }
+
+    #[getter]
+    pub fn morph_targets(&self) -> Vec<String> {
+        self.inner.morph_targets.clone()
+    }
+
+    #[setter]
+    pub fn set_morph_targets(&mut self, targets: Vec<String>) {
+        self.inner.morph_targets = targets;
+    }
+
+    #[getter]
+    pub fn tags(&self) -> Vec<String> {
+        self.inner.tags.clone()
+    }
+
+    #[setter]
+    pub fn set_tags(&mut self, tags: Vec<String>) {
+        self.inner.tags = tags;
+    }
+
+    pub fn to_json(&self) -> PyResult<String> {
+        self.inner
+            .to_json()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    pub fn from_json(json_str: &str) -> PyResult<Self> {
+        AssetManifest::from_json(json_str)
+            .map(|inner| Self { inner })
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "AssetManifest(id='{}', name='{}', category='{}')",
+            self.inner.id, self.inner.name, self.category()
+        )
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "Skeleton")]
+pub struct PySkeleton {
+    pub inner: Skeleton,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PySkeleton {
+    #[new]
+    pub fn new(name: &str) -> Self {
+        Self {
+            inner: Skeleton::new(name),
+        }
+    }
+
+    #[getter]
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+
+    #[setter]
+    pub fn set_name(&mut self, val: String) {
+        self.inner.name = val;
+    }
+
+    #[getter]
+    pub fn node_count(&self) -> usize {
+        self.inner.nodes.len()
+    }
+
+    #[getter]
+    pub fn root_indices(&self) -> Vec<u32> {
+        self.inner.root_indices.clone()
+    }
+
+    #[pyo3(signature = (id, name, parent_id=None, translation=None, rotation=None, scale=None))]
+    pub fn add_node(
+        &mut self,
+        id: u32,
+        name: &str,
+        parent_id: Option<u32>,
+        translation: Option<[f32; 3]>,
+        rotation: Option<[f32; 4]>,
+        scale: Option<[f32; 3]>,
+    ) {
+        let mut node = SkeletonNode::new(id, name);
+        if let Some(t) = translation {
+            node.translation = t;
+        }
+        if let Some(r) = rotation {
+            node.rotation = r;
+        }
+        if let Some(s) = scale {
+            node.scale = s;
+        }
+        self.inner.add_node(node, parent_id);
+    }
+
+    pub fn to_json(&self) -> PyResult<String> {
+        self.inner
+            .to_json()
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    pub fn from_json(json_str: &str) -> PyResult<Self> {
+        Skeleton::from_json(json_str)
+            .map(|inner| Self { inner })
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "Skeleton(name='{}', nodes={})",
+            self.inner.name,
+            self.inner.nodes.len()
+        )
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyfunction]
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -326,6 +565,8 @@ fn libavicreator(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMorpher>()?;
     m.add_class::<PyFitter>()?;
     m.add_class::<PyRigger>()?;
+    m.add_class::<PyAssetManifest>()?;
+    m.add_class::<PySkeleton>()?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
     Ok(())
 }
