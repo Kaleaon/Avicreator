@@ -196,6 +196,57 @@ impl PyMorpher {
         vec3_to_pyarray(py, evaluated)
     }
 
+    pub fn set_relaxation_enabled(&mut self, enabled: bool) {
+        self.inner.enable_relaxation = enabled;
+    }
+
+    pub fn set_relaxation_factor(&mut self, factor: f32) {
+        self.inner.relaxation_factor = factor;
+    }
+
+    pub fn set_max_iterations(&mut self, max_iterations: usize) {
+        self.inner.max_iterations = max_iterations;
+    }
+
+    pub fn set_convergence_threshold(&mut self, threshold: f32) {
+        self.inner.convergence_threshold = threshold;
+    }
+
+    pub fn get_volume(&self, vertices: Option<Vec<[f32; 3]>>) -> f32 {
+        if let Some(verts) = vertices {
+            let vec3_verts: Vec<Vec3> = verts.iter().map(|v| Vec3::from_slice(v)).collect();
+            self.inner.calculate_volume(&vec3_verts)
+        } else {
+            let evaluated = self.inner.evaluate();
+            self.inner.calculate_volume(&evaluated)
+        }
+    }
+
+    pub fn get_volumetric_center(&self, vertices: Option<Vec<[f32; 3]>>) -> [f32; 3] {
+        if let Some(verts) = vertices {
+            let vec3_verts: Vec<Vec3> = verts.iter().map(|v| Vec3::from_slice(v)).collect();
+            self.inner.calculate_volumetric_center(&vec3_verts).to_array()
+        } else {
+            let evaluated = self.inner.evaluate();
+            self.inner.calculate_volumetric_center(&evaluated).to_array()
+        }
+    }
+
+    pub fn get_surface_normals<'py>(
+        &self,
+        py: Python<'py>,
+        vertices: Option<Vec<[f32; 3]>>,
+    ) -> Bound<'py, PyArray2<f32>> {
+        let normals = if let Some(verts) = vertices {
+            let vec3_verts: Vec<Vec3> = verts.iter().map(|v| Vec3::from_slice(v)).collect();
+            self.inner.calculate_surface_normals(&vec3_verts)
+        } else {
+            let evaluated = self.inner.evaluate();
+            self.inner.calculate_surface_normals(&evaluated)
+        };
+        vec3_to_pyarray(py, normals)
+    }
+
     pub fn mix_presets(
         &mut self,
         preset_a: HashMap<String, f32>,
