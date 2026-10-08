@@ -145,4 +145,3 @@ def test_multi_layer_fitter():
     assert fitted.shape == (1, 3)
     # Jacket vertex must clear the inner shirt (Z >= 0.20 + 0.005)
     assert fitted[0, 2] >= 0.205 - 1e-4
-
