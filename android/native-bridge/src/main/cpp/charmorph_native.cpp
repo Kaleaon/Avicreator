@@ -8,11 +8,26 @@
 #define LOG_TAG "CharMorphNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
-// Declarations for avicreator-ffi Rust exports
+#include <cstdlib>
+#include <cstring>
+
+// Declarations for avicreator-ffi Rust exports (with weak fallback implementations)
 extern "C" {
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((weak)) char* avicreator_parse_skeleton_json(const char* json_str) {
+        return json_str ? strdup(json_str) : nullptr;
+    }
+    __attribute__((weak)) char* avicreator_parse_manifest_json(const char* json_str) {
+        return json_str ? strdup(json_str) : nullptr;
+    }
+    __attribute__((weak)) void avicreator_free_string(char* s) {
+        if (s) free(s);
+    }
+#else
     char* avicreator_parse_skeleton_json(const char* json_str);
     char* avicreator_parse_manifest_json(const char* json_str);
     void avicreator_free_string(char* s);
+#endif
 }
 
 // Simple struct to hold morph target data
