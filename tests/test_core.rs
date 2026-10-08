@@ -1,9 +1,8 @@
 use libavicreator::{
-    math::{Ray, Triangle},
-    morpher::{BaseMesh, MorphDelta, MorphTarget, Morpher, SparseDelta},
-    rigging::{Bone, BonePose, Skeleton, VertexWeight},
+    morpher::{BaseMesh, MorphTarget, Morpher},
+    rigging::{Bone, Skeleton, VertexWeight},
     spatial::{BVHTree, KDTree},
-    FitCalc, Fitter, GltfIO,
+    Fitter,
 };
 use glam::Vec3;
 use std::collections::HashMap;
@@ -35,7 +34,7 @@ fn test_kdtree_search() {
     ];
     let kdtree = KDTree::build(&points);
 
-    let (pt, idx, dist) = kdtree.find_nearest(Vec3::new(0.1, 0.1, 0.0)).unwrap();
+    let (_pt, idx, dist) = kdtree.find_nearest(Vec3::new(0.1, 0.1, 0.0)).unwrap();
     assert_eq!(idx, 0);
     assert!(dist < 0.2);
 }

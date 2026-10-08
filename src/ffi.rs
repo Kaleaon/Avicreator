@@ -1,3 +1,5 @@
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_float, c_int};
 use glam::Vec3;
@@ -60,6 +62,52 @@ pub extern "C" fn avicreator_morpher_set_weight(
     if let Ok(name_str) = c_str.to_str() {
         morpher.set_weight(name_str, weight);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn avicreator_morpher_set_relaxation(
+    morpher: *mut Morpher,
+    enabled: c_int,
+    factor: c_float,
+    max_iterations: usize,
+    threshold: c_float,
+) {
+    if morpher.is_null() {
+        return;
+    }
+    let morpher = unsafe { &mut *morpher };
+    morpher.enable_relaxation = enabled != 0;
+    morpher.relaxation_factor = factor;
+    morpher.max_iterations = max_iterations;
+    morpher.convergence_threshold = threshold;
+}
+
+#[no_mangle]
+pub extern "C" fn avicreator_morpher_get_volume(morpher: *const Morpher) -> c_float {
+    if morpher.is_null() {
+        return 0.0;
+    }
+    let morpher = unsafe { &*morpher };
+    let evaluated = morpher.evaluate();
+    morpher.calculate_volume(&evaluated)
+}
+
+#[no_mangle]
+pub extern "C" fn avicreator_morpher_get_volumetric_center(
+    morpher: *const Morpher,
+    out_center: *mut c_float,
+) -> c_int {
+    if morpher.is_null() || out_center.is_null() {
+        return -1;
+    }
+    let morpher = unsafe { &*morpher };
+    let evaluated = morpher.evaluate();
+    let center = morpher.calculate_volumetric_center(&evaluated);
+    let slice = unsafe { std::slice::from_raw_parts_mut(out_center, 3) };
+    slice[0] = center.x;
+    slice[1] = center.y;
+    slice[2] = center.z;
+    0
 }
 
 #[no_mangle]

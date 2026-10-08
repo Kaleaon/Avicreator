@@ -55,6 +55,10 @@ class SJCalc:
         self.rig = rig
         self.char = char
         self.get_co = get_co
+        self.volumetric_center = None
+        self.mesh_volume = 0.0
+        self.surface_normals = None
+
         if rig:
             self.rig_name = rig.data.get("charmorph_rig_type")
 
@@ -70,6 +74,33 @@ class SJCalc:
                 name: {k: self._calc_influence(v) for k, v in rig.sliding_joints.items()}
                 for name, rig in self.char.armature.items() if rig.sliding_joints
             }
+
+    def update_volumetric_metrics(self, volumetric_center=None, mesh_volume=None, surface_normals=None):
+        """Samples post-relaxation surface normals and volumetric centers to set joint influence weights."""
+        if volumetric_center is not None:
+            self.volumetric_center = volumetric_center
+        if mesh_volume is not None:
+            self.mesh_volume = float(mesh_volume)
+        if surface_normals is not None:
+            self.surface_normals = surface_normals
+
+    def sample_surface_normal(self, vert_idx: int):
+        """Samples post-relaxation surface normal at the given vertex index."""
+        if self.surface_normals is not None and vert_idx < len(self.surface_normals):
+            return self.surface_normals[vert_idx]
+        return None
+
+    def calc_volumetric_distance(self, vert_idx: int) -> float:
+        """Calculates distance from post-relaxation volumetric center to specified vertex."""
+        if not self.get_co or self.volumetric_center is None:
+            return 0.0
+        co = self.get_co(vert_idx)
+        vc = self.volumetric_center
+        if hasattr(co, "x") and hasattr(vc, "x"):
+            return (co - vc).length
+        elif hasattr(co, "__len__") and hasattr(vc, "__len__"):
+            return sum((co[i] - vc[i]) ** 2 for i in range(min(len(co), len(vc)))) ** 0.5
+        return 0.0
 
     def _rig_joints(self, rig):
         return self.char.armature.get(rig, charlib.Armature).sliding_joints
@@ -95,10 +126,18 @@ class SJCalc:
             calc = compile(calc, "", "eval")
             data["calc"] = calc
 
-        vals = {}
+        vals = {
+            "volumetric_center": self.volumetric_center,
+            "vol_center": self.volumetric_center,
+            "mesh_volume": self.mesh_volume,
+            "surface_normals": self.surface_normals,
+        }
         for k, v in data.items():
             if k.startswith("verts_"):
                 vals[k] = self._calc_avg_dists(v)
+            elif k.startswith("vol_vert_"):
+                if isinstance(v, int):
+                    vals[k] = self.calc_volumetric_distance(v)
         try:
             return eval(calc, {"__builtins__": None}, vals)
         except Exception as e:
