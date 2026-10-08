@@ -213,4 +213,3 @@ def test_gltf_export_skinning_attributes():
         assert len(data["skins"]) > 0
         assert "inverseBindMatrices" in data["skins"][0]
         assert "joints" in data["skins"][0]
-
