@@ -16,6 +16,9 @@ wasm = ["dep:wasm-bindgen", "dep:js-sys"]
 ffi = []
 
 [dependencies]
+# Schema
+avicreator-schema = { path = "crates/avicreator-schema" }
+
 # Math & Collections
 glam = { version = "0.28", features = ["serde", "bytemuck"] }
 rayon = "1.10"
