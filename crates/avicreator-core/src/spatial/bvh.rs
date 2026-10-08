@@ -85,7 +85,7 @@ impl AABB {
 
     pub fn sq_dist_to_point(&self, p: Vec3) -> f32 {
         let mut sq_dist = 0.0;
-        
+
         if p.x < self.min.x {
             let d = self.min.x - p.x;
             sq_dist += d * d;
