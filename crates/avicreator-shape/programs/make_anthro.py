@@ -25,8 +25,10 @@ def digitigrade(thick):
 def claws(fingers, length, radius):
     out = []
     for f in fingers:
-        out.append({"kind": "chain", "name": f + "_claw", "mirror": True, "rigid": True, "attach": f, "at": 0.85,
-                     "dir": [1, -0.6, 0], "length": length, "radius": [radius, 0.0008], "blend": 0.002})
+        out.append({
+            "kind": "chain", "name": f + "_claw", "mirror": True, "rigid": True, "attach": f, "at": 0.85,
+            "dir": [1, -0.6, 0], "length": length, "radius": [radius, 0.0008], "blend": 0.002
+        })
     return out
 
 def hand(fingers, length_scale, thick, curl):
@@ -138,7 +140,9 @@ scaly = program("scaly", {
 
 def dump(v, ind=""):
     """JSON with short arrays and small objects on one line (matches the Studio formatter)."""
-    flat = lambda x: not isinstance(x, (dict, list))
+    def flat(x):
+        return not isinstance(x, (dict, list))
+
     if isinstance(v, list):
         if all(flat(x) for x in v):
             return "[" + ", ".join(json.dumps(x) for x in v) + "]"
