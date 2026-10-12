@@ -1,0 +1,97 @@
+{
+  "name": "human",
+  "skeleton": "second_life",
+  "params": {
+    "hip_height": {"value": 0.94, "min": 0.75, "max": 1.1},
+    "torso_length": {"value": 0.5, "min": 0.4, "max": 0.62},
+    "shoulder_width": {"value": 0.18, "min": 0.13, "max": 0.25},
+    "arm_length": {"value": 0.56, "min": 0.45, "max": 0.7},
+    "hand_size": {"value": 1.0, "min": 0.8, "max": 1.25},
+    "head_size": {"value": 1.0, "min": 0.85, "max": 1.2},
+    "build": {"value": 1.0, "min": 0.8, "max": 1.4},
+    "bust": {"value": 0.0, "min": 0.0, "max": 1.0}
+  },
+  "settings": {"blend": 0.035, "resolution": 480, "triangles": 40000},
+  "parts": [
+    {
+      "kind": "chain", "name": "spine", "from": [0, "$hip_height", 0],
+      "points": [[0, 0.1, -0.005], [0, "$torso_length*0.5", -0.01], [0, "$torso_length", -0.02]],
+      "bones": ["mPelvis", "mTorso", "mChest"], "radius": ["0.11*$build", "0.1*$build", "0.105*$build", 0.07],
+      "limits": {"bend": [-30, 30], "side": [-25, 25], "twist": [-30, 30]}
+    },
+    {"kind": "blob", "name": "hips", "attach": "mPelvis", "at": 0.2, "offset": [0, -0.02, -0.005], "radii": ["0.165*$build", 0.11, "0.115*$build"], "bone": false},
+    {"kind": "blob", "name": "glute", "mirror": true, "attach": "mPelvis", "at": 0, "offset": [0.065, -0.05, -0.05], "radii": ["0.08*$build", 0.095, "0.075*$build"], "bone": false},
+    {"kind": "blob", "name": "abdomen", "attach": "mTorso", "at": 0.5, "offset": [0, 0, 0.01], "radii": ["0.135*$build", 0.12, "0.1*$build"], "bone": false},
+    {"kind": "blob", "name": "ribcage", "attach": "mChest", "at": 0.4, "radii": ["0.155*$build", 0.17, "0.108*$build"], "bone": false},
+    {"kind": "blob", "name": "breast", "mirror": true, "attach": "mChest", "at": 0.42, "offset": [0.065, 0, 0.07], "radii": ["0.065+0.03*$bust", "0.055+0.03*$bust", "0.04+0.055*$bust"], "bone": false},
+    {"kind": "blob", "name": "trapezius", "mirror": true, "attach": "mChest", "at": 0.9, "offset": [0.085, -0.01, -0.015], "radii": [0.08, 0.045, 0.055], "bone": false},
+    {"kind": "chain", "name": "neck", "attach": "mChest", "dir": [0, 1, 0.15], "length": 0.1, "bones": ["mNeck"], "radius": [0.058, 0.052], "limits": {"bend": [-40, 40]}},
+    {
+      "kind": "blob", "name": "head", "attach": "mNeck", "offset": [0, "0.085*$head_size", 0.015],
+      "radii": ["0.078*$head_size", "0.105*$head_size", "0.095*$head_size"], "bone": "mHead", "limits": {"bend": [-40, 40]}
+    },
+    {"kind": "blob", "name": "face", "attach": "mHead", "at": 0, "offset": [0, "0.058*$head_size", "0.045*$head_size"], "radii": ["0.062*$head_size", "0.074*$head_size", "0.064*$head_size"], "bone": false, "blend": 0.03},
+    {"kind": "blob", "name": "brow", "attach": "mHead", "at": 0, "offset": [0, "0.112*$head_size", "0.078*$head_size"], "radii": ["0.058*$head_size", 0.016, 0.024], "bone": false, "blend": 0.02},
+    {"kind": "chain", "name": "jaw", "attach": "mHead", "at": 0.35, "offset": [0, -0.015, 0], "dir": [0, -0.75, 1], "length": "0.06*$head_size", "bones": ["mFaceJaw"], "radius": [0.03, 0.02], "blend": 0.03, "limits": {"bend": [-5, 25]}},
+    {"kind": "blob", "name": "chin", "attach": "mFaceJaw", "radii": [0.02, 0.015, 0.015], "bone": false, "blend": 0.02},
+    {"kind": "blob", "name": "nose", "attach": "mHead", "at": 0, "offset": [0, "0.082*$head_size", "0.1*$head_size"], "axis": [0, -0.35, 1], "radii": [0.011, 0.017, 0.016], "bone": false, "blend": 0.012},
+    {"kind": "blob", "name": "eye", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.032, "0.1*$head_size", "0.083*$head_size"], "radii": 0.012, "bone": "mEyeLeft", "pivot": "center", "blend": 0.006},
+    {"kind": "blob", "name": "ear", "mirror": true, "attach": "mHead", "at": 0, "offset": ["0.076*$head_size", "0.085*$head_size", 0], "radii": [0.012, 0.03, 0.02], "bone": false, "blend": 0.01},
+    {
+      "kind": "chain", "name": "arm", "mirror": true, "attach": "mChest", "at": 0.8, "offset": [0.02, 0, -0.015],
+      "points": [
+        ["$shoulder_width", 0.01, -0.005], ["$shoulder_width+$arm_length*0.52", 0, -0.01],
+        ["$shoulder_width+$arm_length", 0, 0], ["$shoulder_width+$arm_length+0.085*$hand_size", -0.005, 0]
+      ],
+      "bones": ["mCollarLeft", "mShoulderLeft", "mElbowLeft", "mWristLeft"],
+      "radius": ["0.05*$build", "0.048*$build", "0.04*$build", 0.03, 0.026], "limits": {"bend": [-90, 90], "side": [-90, 90]}
+    },
+    {"kind": "blob", "name": "deltoid", "mirror": true, "attach": "mShoulderLeft", "at": 0.1, "radii": ["0.055*$build", "0.05*$build", "0.052*$build"], "bone": false},
+    {"kind": "blob", "name": "biceps", "mirror": true, "attach": "mShoulderLeft", "at": 0.5, "axis": [1, 0, 0], "radii": ["0.045*$build", "0.043*$build", 0.13], "bone": false},
+    {"kind": "blob", "name": "forearm", "mirror": true, "attach": "mElbowLeft", "at": 0.3, "axis": [1, 0, 0], "radii": ["0.04*$build", "0.035*$build", 0.12], "bone": false},
+    {"kind": "blob", "name": "palm", "mirror": true, "attach": "mWristLeft", "at": 0.55, "axis": [1, 0, 0], "radii": ["0.043*$hand_size", "0.015*$hand_size", "0.052*$hand_size"], "bone": false, "blend": 0.015},
+    {
+      "kind": "chain", "name": "index", "mirror": true, "attach": "mWristLeft", "offset": [0, 0, "0.028*$hand_size"],
+      "dir": [1, -0.02, 0.1], "length": "0.085*$hand_size", "segments": 3, "curl": -12, "bend_axis": [0, 0, 1],
+      "bones": ["mHandIndex1Left", "mHandIndex2Left", "mHandIndex3Left"], "radius": ["0.0088*$hand_size", "0.007*$hand_size"],
+      "blend": 0.004, "limits": {"bend": [-90, 10]}
+    },
+    {
+      "kind": "chain", "name": "middle", "mirror": true, "attach": "mWristLeft", "offset": [0.004, 0, "0.008*$hand_size"],
+      "dir": [1, -0.02, 0], "length": "0.095*$hand_size", "segments": 3, "curl": -12, "bend_axis": [0, 0, 1],
+      "bones": ["mHandMiddle1Left", "mHandMiddle2Left", "mHandMiddle3Left"], "radius": ["0.009*$hand_size", "0.0072*$hand_size"],
+      "blend": 0.004, "limits": {"bend": [-90, 10]}
+    },
+    {
+      "kind": "chain", "name": "ring", "mirror": true, "attach": "mWristLeft", "offset": [0, 0, "-0.012*$hand_size"],
+      "dir": [1, -0.02, -0.08], "length": "0.088*$hand_size", "segments": 3, "curl": -12, "bend_axis": [0, 0, 1],
+      "bones": ["mHandRing1Left", "mHandRing2Left", "mHandRing3Left"], "radius": ["0.0085*$hand_size", "0.0068*$hand_size"],
+      "blend": 0.004, "limits": {"bend": [-90, 10]}
+    },
+    {
+      "kind": "chain", "name": "pinky", "mirror": true, "attach": "mWristLeft", "offset": [-0.008, 0, "-0.031*$hand_size"],
+      "dir": [1, -0.02, -0.2], "length": "0.068*$hand_size", "segments": 3, "curl": -12, "bend_axis": [0, 0, 1],
+      "bones": ["mHandPinky1Left", "mHandPinky2Left", "mHandPinky3Left"], "radius": ["0.0076*$hand_size", "0.006*$hand_size"],
+      "blend": 0.004, "limits": {"bend": [-90, 10]}
+    },
+    {
+      "kind": "chain", "name": "thumb", "mirror": true, "attach": "mWristLeft", "at": 0.15, "offset": [0, -0.012, "0.03*$hand_size"],
+      "dir": [0.55, -0.25, 0.8], "length": "0.075*$hand_size", "segments": 3, "curl": -10, "bend_axis": [0, 0, 1],
+      "bones": ["mHandThumb1Left", "mHandThumb2Left", "mHandThumb3Left"], "radius": ["0.0125*$hand_size", "0.0085*$hand_size"],
+      "blend": 0.01, "limits": {"bend": [-60, 20]}
+    },
+    {
+      "kind": "chain", "name": "leg", "mirror": true, "attach": "mPelvis", "at": 0, "offset": ["0.09*$build", -0.055, 0],
+      "points": [
+        [0.005, "-($hip_height-0.135)*0.52", 0.012], [0.01, "-($hip_height-0.135)", -0.02],
+        [0.012, "-$hip_height+0.075", 0.1], [0.012, "-$hip_height+0.075", 0.16]
+      ],
+      "bones": ["mHipLeft", "mKneeLeft", "mAnkleLeft", "mFootLeft"], "radius": ["0.075*$build", "0.05*$build", 0.04, 0.025, 0.02],
+      "limits": {"bend": [-120, 30], "side": [-45, 45]}
+    },
+    {"kind": "blob", "name": "thigh", "mirror": true, "attach": "mHipLeft", "at": 0.4, "offset": [0, 0, 0.005], "radii": ["0.078*$build", 0.2, "0.082*$build"], "bone": false},
+    {"kind": "blob", "name": "calf", "mirror": true, "attach": "mKneeLeft", "at": 0.33, "offset": [0, 0, -0.012], "radii": ["0.053*$build", 0.13, "0.057*$build"], "bone": false},
+    {"kind": "blob", "name": "foot", "mirror": true, "attach": "mAnkleLeft", "at": 0.45, "offset": [0, -0.028, 0], "radii": [0.043, 0.03, 0.105], "bone": false, "blend": 0.02},
+    {"kind": "blob", "name": "heel", "mirror": true, "attach": "mAnkleLeft", "at": 0, "offset": [0, -0.05, -0.03], "radii": [0.035, 0.03, 0.04], "bone": false, "blend": 0.02}
+  ]
+}

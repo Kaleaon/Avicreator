@@ -1,0 +1,21 @@
+[package]
+name = "avicreator-shape"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Rig-aware implicit shape programs: SDF parts with skeletons, influence fields, GLSL preview and skinned mesh export"
+
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "avishape"
+path = "src/bin/avishape.rs"
+
+[dependencies]
+avicreator-core = { path = "../avicreator-core" }
+avicreator-schema = { path = "../avicreator-schema" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

@@ -111,11 +111,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "avicreator-shape"
+version = "0.1.0"
+dependencies = [
+ "avicreator-core",
+ "avicreator-schema",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "avicreator-wasm"
 version = "0.1.0"
 dependencies = [
  "avicreator-core",
  "avicreator-schema",
+ "avicreator-shape",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",
