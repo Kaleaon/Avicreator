@@ -1,67 +1,70 @@
 {
   "name": "human",
   "skeleton": "second_life",
+  "notes": "Skeleton proportions and the musculature scope were fitted to Z-Anatomy, The libre 3D atlas of anatomy (CC-BY-SA 4.0), itself derived from BodyParts3D, The Database Center for Life Science (CC-BY-SA 2.1 Japan). Regenerate the muscles with tools/anatomy/fit_muscles.py.",
   "params": {
-    "hip_height": {"value": 0.94, "min": 0.75, "max": 1.1},
-    "torso_length": {"value": 0.5, "min": 0.4, "max": 0.62},
-    "shoulder_width": {"value": 0.18, "min": 0.13, "max": 0.25},
-    "arm_length": {"value": 0.56, "min": 0.45, "max": 0.7},
+    "hip_height": {"value": 0.913, "min": 0.75, "max": 1.1},
+    "torso_length": {"value": 0.538, "min": 0.4, "max": 0.62},
+    "shoulder_width": {"value": 0.15, "min": 0.13, "max": 0.25},
+    "arm_length": {"value": 0.54, "min": 0.45, "max": 0.7},
     "hand_size": {"value": 1.0, "min": 0.8, "max": 1.25},
     "head_size": {"value": 1.0, "min": 0.85, "max": 1.2},
     "build": {"value": 1.0, "min": 0.8, "max": 1.4},
-    "bust": {"value": 0.0, "min": 0.0, "max": 1.0}
+    "bust": {"value": 0.0, "min": 0.0, "max": 1.0},
+    "muscle": {"value": 1.0, "min": 0.5, "max": 1.8},
+    "fat": {"value": 0.01, "min": 0.0, "max": 0.03}
   },
   "settings": {"blend": 0.035, "resolution": 900, "triangles": 60000},
   "poses": {
-    "anatomical": {"mCollarLeft": {"bend": -12}, "mShoulderLeft": {"bend": -66}, "mElbowLeft": {"twist": 60}}
+    "anatomical": {"mShoulderLeft": {"bend": -80, "side": 1.7}, "mElbowLeft": {"side": -13, "twist": 60}}
   },
   "parts": [
     {
       "kind": "chain", "name": "spine", "from": [0, "$hip_height", 0],
-      "points": [[0, 0.1, -0.005], [0, "$torso_length*0.5", -0.01], [0, "$torso_length", -0.02]],
-      "bones": ["mPelvis", "mTorso", "mChest"], "radius": ["0.11*$build", "0.1*$build", "0.105*$build", 0.07],
+      "points": [[0, 0.1, -0.005], [0, "$torso_length*0.5", -0.01], [0, "$torso_length", -0.026]],
+      "bones": ["mPelvis", "mTorso", "mChest"], "radius": ["0.1*$build", "0.088*$build", "0.1*$build", 0.07],
       "limits": {"bend": [-30, 30], "side": [-25, 25], "twist": [-30, 30]}
     },
-    {"kind": "blob", "name": "hips", "attach": "mPelvis", "at": 0.2, "offset": [0, -0.02, -0.005], "radii": ["0.165*$build", 0.11, "0.115*$build"], "bone": false},
-    {"kind": "blob", "name": "glute", "mirror": true, "attach": "mPelvis", "at": 0, "offset": [0.065, -0.05, -0.05], "radii": ["0.08*$build", 0.095, "0.075*$build"], "bone": false},
-    {"kind": "blob", "name": "abdomen", "attach": "mTorso", "at": 0.5, "offset": [0, 0, 0.01], "radii": ["0.135*$build", 0.12, "0.1*$build"], "bone": false},
-    {"kind": "blob", "name": "ribcage", "attach": "mChest", "at": 0.4, "radii": ["0.155*$build", 0.17, "0.108*$build"], "bone": false},
-    {"kind": "blob", "name": "breast", "mirror": true, "attach": "mChest", "at": 0.42, "offset": [0.065, 0, 0.07], "radii": ["0.065+0.03*$bust", "0.055+0.03*$bust", "0.04+0.055*$bust"], "bone": false},
-    {"kind": "blob", "name": "trapezius", "mirror": true, "attach": "mChest", "at": 0.9, "offset": [0.085, -0.01, -0.015], "radii": [0.08, 0.045, 0.055], "bone": false},
-    {"kind": "chain", "name": "neck", "attach": "mChest", "dir": [0, 1, 0.15], "length": 0.1, "bones": ["mNeck"], "radius": [0.058, 0.052], "limits": {"bend": [-40, 40]}},
+    {"kind": "blob", "name": "hips", "attach": "mPelvis", "at": 0.2, "offset": [0, -0.02, -0.01], "radii": ["0.145*$build+($fat-0.01)", 0.11, "0.105*$build+1.5*($fat-0.01)"], "bone": false},
+    {"kind": "blob", "name": "glute", "mirror": true, "attach": "mPelvis", "at": 0, "offset": [0.065, -0.05, -0.05], "radii": ["0.08*$build+($fat-0.01)", 0.095, "0.075*$build+($fat-0.01)"], "bone": false},
+    {"kind": "blob", "name": "abdomen", "attach": "mTorso", "at": 0.5, "offset": [0, 0.02, 0.03], "radii": ["0.135*$build+1.5*($fat-0.01)", 0.12, "0.1*$build+2*($fat-0.01)"], "bone": false},
+    {"kind": "blob", "name": "ribcage", "attach": "mChest", "at": 0.4, "radii": ["0.155*$build", 0.17, "0.115*$build"], "bone": false},
+    {"kind": "blob", "name": "breast", "mirror": true, "attach": "mChest", "at": 0.42, "offset": [0.065, 0, 0.075], "radii": ["0.055+0.04*$bust+($fat-0.01)", "0.045+0.04*$bust+($fat-0.01)", "0.042+0.055*$bust+1.5*($fat-0.01)"], "bone": false},
+    {"kind": "blob", "name": "trapezius", "mirror": true, "attach": "mChest", "at": 0.9, "offset": [0.085, -0.01, -0.015], "radii": [0.075, 0.04, 0.05], "bone": false},
+    {"kind": "chain", "name": "neck", "attach": "mChest", "dir": [0, 1, 0.1], "length": 0.092, "bones": ["mNeck"], "radius": [0.052, 0.047], "limits": {"bend": [-40, 40]}},
     {
       "kind": "scope", "name": "head", "scale": "$head_size",
       "parts": [
-        {"kind": "blob", "name": "cranium", "attach": "mNeck", "offset": [0, 0.1, -0.008], "radii": [0.073, 0.094, 0.095], "bone": "mHead", "limits": {"bend": [-40, 40]}},
-        {"kind": "blob", "name": "forehead", "attach": "mHead", "at": 0, "offset": [0, 0.122, 0.03], "radii": [0.064, 0.056, 0.06], "bone": false},
-        {"kind": "blob", "name": "occiput", "attach": "mHead", "at": 0, "offset": [0, 0.085, -0.045], "radii": [0.066, 0.07, 0.06], "bone": false},
-        {"kind": "blob", "name": "face", "attach": "mHead", "at": 0, "offset": [0, 0.055, 0.04], "radii": [0.054, 0.046, 0.044], "bone": false, "blend": 0.03},
-        {"kind": "blob", "name": "brow_ridge", "attach": "mHead", "at": 0, "offset": [0, 0.093, 0.071], "radii": [0.056, 0.013, 0.02], "bone": false, "blend": 0.02},
-        {"kind": "blob", "name": "eye_socket", "mirror": true, "op": "subtract", "attach": "mHead", "at": 0, "offset": [0.031, 0.075, 0.082], "radii": [0.018, 0.012, 0.0115], "blend": 0.012},
-        {"kind": "blob", "name": "brow_inner", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.013, 0.095, 0.083], "radii": [0.01, 0.0045, 0.0075], "bone": "mFaceEyebrowInnerLeft", "pivot": "center", "blend": 0.008},
-        {"kind": "blob", "name": "brow_center", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.029, 0.098, 0.081], "radii": [0.011, 0.0045, 0.0075], "bone": "mFaceEyebrowCenterLeft", "pivot": "center", "blend": 0.008},
-        {"kind": "blob", "name": "brow_outer", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.045, 0.094, 0.071], "radii": [0.01, 0.0045, 0.0075], "bone": "mFaceEyebrowOuterLeft", "pivot": "center", "blend": 0.008},
-        {"kind": "blob", "name": "lid_shell", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.031, 0.075, 0.0687], "radii": [0.0134, 0.0132, 0.0133], "bone": "mFaceEyeLidUpperLeft", "pivot": "center", "blend": 0.004},
-        {"kind": "blob", "name": "lid_lower", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.031, 0.0684, 0.0772], "radii": [0.0105, 0.0032, 0.0045], "bone": "mFaceEyeLidLowerLeft", "pivot": "center", "blend": 0.003},
-        {"kind": "blob", "name": "eye_opening", "mirror": true, "op": "subtract", "attach": "mHead", "at": 0, "offset": [0.0312, 0.0738, 0.0815], "radii": [0.0128, 0.0046, 0.0062], "blend": 0.0012},
-        {"kind": "blob", "name": "eye", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.031, 0.0745, 0.0675], "radii": 0.0118, "bone": "mEyeLeft", "pivot": "center", "blend": 0},
-        {"kind": "blob", "name": "cheekbone", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.046, 0.06, 0.055], "radii": [0.019, 0.011, 0.016], "bone": "mFaceCheekUpperLeft", "pivot": "center", "blend": 0.02},
-        {"kind": "blob", "name": "cheek", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.04, 0.03, 0.046], "radii": [0.018, 0.018, 0.013], "bone": "mFaceCheekLowerLeft", "pivot": "center", "blend": 0.025},
-        {"kind": "chain", "name": "nose_bridge", "attach": "mHead", "at": 0, "offset": [0, 0.086, 0.078], "points": [[0, -0.043, 0.029]], "bones": ["mFaceNoseBridge"], "radius": [0.0072, 0.0092], "blend": 0.012},
-        {"kind": "blob", "name": "nose_tip", "attach": "mHead", "at": 0, "offset": [0, 0.039, 0.106], "radii": [0.0098, 0.0098, 0.0105], "bone": "mFaceNoseCenter", "pivot": "center", "blend": 0.01},
-        {"kind": "blob", "name": "nose_wing", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.0115, 0.032, 0.097], "radii": [0.0072, 0.0068, 0.0085], "bone": "mFaceNoseLeft", "pivot": "center", "blend": 0.008},
-        {"kind": "blob", "name": "nose_base", "attach": "mHead", "at": 0, "offset": [0, 0.0285, 0.1025], "radii": [0.0058, 0.0055, 0.007], "bone": "mFaceNoseBase", "pivot": "center", "blend": 0.006},
-        {"kind": "blob", "name": "nostril", "mirror": true, "op": "subtract", "global": true, "attach": "mHead", "at": 0, "offset": [0.0078, 0.0285, 0.1025], "axis": [0.25, -0.5, 1], "radii": [0.0032, 0.0025, 0.0042], "blend": 0.002},
-        {"kind": "blob", "name": "maxilla", "attach": "mHead", "at": 0, "offset": [0, 0.014, 0.068], "radii": [0.023, 0.015, 0.012], "bone": "mFaceTeethUpper", "pivot": "center", "blend": 0.02},
-        {"kind": "blob", "name": "lip_upper", "attach": "mHead", "at": 0, "offset": [0, 0.0045, 0.0935], "radii": [0.0072, 0.0038, 0.0046], "bone": "mFaceLipUpperCenter", "pivot": "center", "blend": 0.006},
+        {"kind": "blob", "name": "cranium", "attach": "mNeck", "offset": [0, 0.074, 0.004], "radii": [0.073, 0.094, 0.095], "bone": "mHead", "limits": {"bend": [-40, 40]}},
+        {"kind": "blob", "name": "forehead", "attach": "mHead", "at": 0, "offset": [0, 0.096, 0.042], "radii": [0.064, 0.056, 0.06], "bone": false},
+        {"kind": "blob", "name": "occiput", "attach": "mHead", "at": 0, "offset": [0, 0.059, -0.033], "radii": [0.066, 0.07, 0.06], "bone": false},
+        {"kind": "blob", "name": "face", "attach": "mHead", "at": 0, "offset": [0, 0.029, 0.052], "radii": [0.054, 0.046, 0.044], "bone": false, "blend": 0.03},
+        {"kind": "blob", "name": "brow_ridge", "attach": "mHead", "at": 0, "offset": [0, 0.067, 0.083], "radii": [0.056, 0.013, 0.02], "bone": false, "blend": 0.02},
+        {"kind": "blob", "name": "eye_socket", "mirror": true, "op": "subtract", "attach": "mHead", "at": 0, "offset": [0.031, 0.049, 0.094], "radii": [0.018, 0.012, 0.0115], "blend": 0.012},
+        {"kind": "blob", "name": "brow_inner", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.013, 0.069, 0.095], "radii": [0.01, 0.0045, 0.0075], "bone": "mFaceEyebrowInnerLeft", "pivot": "center", "blend": 0.008},
+        {"kind": "blob", "name": "brow_center", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.029, 0.072, 0.093], "radii": [0.011, 0.0045, 0.0075], "bone": "mFaceEyebrowCenterLeft", "pivot": "center", "blend": 0.008},
+        {"kind": "blob", "name": "brow_outer", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.045, 0.068, 0.083], "radii": [0.01, 0.0045, 0.0075], "bone": "mFaceEyebrowOuterLeft", "pivot": "center", "blend": 0.008},
+        {"kind": "blob", "name": "lid_shell", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.031, 0.049, 0.0807], "radii": [0.0134, 0.0132, 0.0133], "bone": "mFaceEyeLidUpperLeft", "pivot": "center", "blend": 0.004},
+        {"kind": "blob", "name": "lid_lower", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.031, 0.0424, 0.0892], "radii": [0.0105, 0.0032, 0.0045], "bone": "mFaceEyeLidLowerLeft", "pivot": "center", "blend": 0.003},
+        {"kind": "blob", "name": "eye_opening", "mirror": true, "op": "subtract", "attach": "mHead", "at": 0, "offset": [0.0312, 0.0478, 0.0935], "radii": [0.0128, 0.0046, 0.0062], "blend": 0.0012},
+        {"kind": "blob", "name": "eye", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.031, 0.0485, 0.0795], "radii": 0.0118, "bone": "mEyeLeft", "pivot": "center", "blend": 0},
+        {"kind": "blob", "name": "cheekbone", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.046, 0.034, 0.067], "radii": [0.019, 0.011, 0.016], "bone": "mFaceCheekUpperLeft", "pivot": "center", "blend": 0.02},
+        {"kind": "blob", "name": "cheek", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.04, 0.004, 0.058], "radii": [0.018, 0.018, 0.013], "bone": "mFaceCheekLowerLeft", "pivot": "center", "blend": 0.025},
+        {"kind": "chain", "name": "nose_bridge", "attach": "mHead", "at": 0, "offset": [0, 0.06, 0.09], "points": [[0, -0.043, 0.029]], "bones": ["mFaceNoseBridge"], "radius": [0.0072, 0.0092], "blend": 0.012},
+        {"kind": "blob", "name": "nose_tip", "attach": "mHead", "at": 0, "offset": [0, 0.013, 0.118], "radii": [0.0098, 0.0098, 0.0105], "bone": "mFaceNoseCenter", "pivot": "center", "blend": 0.01},
+        {"kind": "blob", "name": "nose_wing", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.0115, 0.006, 0.109], "radii": [0.0072, 0.0068, 0.0085], "bone": "mFaceNoseLeft", "pivot": "center", "blend": 0.008},
+        {"kind": "blob", "name": "nose_base", "attach": "mHead", "at": 0, "offset": [0, 0.0025, 0.1145], "radii": [0.0058, 0.0055, 0.007], "bone": "mFaceNoseBase", "pivot": "center", "blend": 0.006},
+        {"kind": "blob", "name": "nostril", "mirror": true, "op": "subtract", "global": true, "attach": "mHead", "at": 0, "offset": [0.0078, 0.0025, 0.1145], "axis": [0.25, -0.5, 1], "radii": [0.0032, 0.0025, 0.0042], "blend": 0.002},
+        {"kind": "blob", "name": "maxilla", "attach": "mHead", "at": 0, "offset": [0, -0.012, 0.08], "radii": [0.023, 0.015, 0.012], "bone": "mFaceTeethUpper", "pivot": "center", "blend": 0.02},
+        {"kind": "blob", "name": "lip_upper", "attach": "mHead", "at": 0, "offset": [0, -0.0215, 0.1055], "radii": [0.0072, 0.0038, 0.0046], "bone": "mFaceLipUpperCenter", "pivot": "center", "blend": 0.006},
         {
-          "kind": "chain", "name": "lip_upper_side", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.004, 0.0045, 0.094],
+          "kind": "chain", "name": "lip_upper_side", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.004, -0.0215, 0.106],
           "points": [[0.01, -0.0008, -0.003], [0.0205, -0.004, -0.0115]], "bones": ["mFaceLipUpperLeft", null],
           "radius": [0.0042, 0.0035, 0.0014], "blend": 0.004
         },
-        {"kind": "blob", "name": "lip_corner", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.0245, 0.0005, 0.0825], "radii": [0.0025, 0.0025, 0.0025], "bone": "mFaceLipCornerLeft", "pivot": "center", "blend": 0.004},
-        {"kind": "blob", "name": "mouth_line", "op": "subtract", "global": true, "attach": "mHead", "at": 0, "offset": [0, 0.0002, 0.0905], "radii": [0.0225, 0.0011, 0.009], "blend": 0.0015},
-        {"kind": "chain", "name": "jaw", "attach": "mHead", "at": 0, "offset": [0, 0.058, -0.004], "points": [[0, -0.093, 0.088]], "bones": ["mFaceJaw"], "radius": [0.012, 0.016], "blend": 0.02, "limits": {"bend": [-5, 25]}},
+        {"kind": "blob", "name": "lip_corner", "mirror": true, "attach": "mHead", "at": 0, "offset": [0.0245, -0.0255, 0.0945], "radii": [0.0025, 0.0025, 0.0025], "bone": "mFaceLipCornerLeft", "pivot": "center", "blend": 0.004},
+        {"kind": "blob", "name": "mouth_line", "op": "subtract", "global": true, "attach": "mHead", "at": 0, "offset": [0, -0.0258, 0.1025], "radii": [0.0225, 0.0011, 0.009], "blend": 0.0015},
+        {"kind": "chain", "name": "jaw", "attach": "mHead", "at": 0, "offset": [0, 0.032, 0.008], "points": [[0, -0.093, 0.088]], "bones": ["mFaceJaw"], "radius": [0.012, 0.016], "blend": 0.02, "limits": {"bend": [-5, 25]}},
         {"kind": "blob", "name": "mandible", "attach": "mFaceJaw", "at": 0, "offset": [0, -0.07, 0.048], "radii": [0.036, 0.022, 0.03], "bone": false},
         {"kind": "chain", "name": "jaw_line", "mirror": true, "rigid": true, "attach": "mFaceJaw", "at": 0, "offset": [0.05, -0.044, -0.008], "points": [[-0.037, -0.045, 0.089]], "radius": [0.011, 0.0095]},
         {"kind": "blob", "name": "chin", "attach": "mFaceJaw", "at": 0, "offset": [0, -0.091, 0.082], "radii": [0.015, 0.012, 0.011], "bone": "mFaceChin", "pivot": "center", "blend": 0.015},
@@ -75,7 +78,7 @@
         {
           "kind": "scope", "name": "ear_kit", "mirror": true,
           "parts": [
-            {"kind": "blob", "name": "ear", "attach": "mHead", "at": 0, "offset": [0.074, 0.07, -0.018], "radii": [0.0055, 0.027, 0.016], "bone": "mFaceEar1Left", "pivot": "center", "separate": true, "blend": 0.004},
+            {"kind": "blob", "name": "ear", "attach": "mHead", "at": 0, "offset": [0.074, 0.044, -0.006], "radii": [0.0055, 0.027, 0.016], "bone": "mFaceEar1Left", "pivot": "center", "separate": true, "blend": 0.004},
             {
               "kind": "chain", "name": "helix", "rigid": true, "attach": "mFaceEar1Left", "at": 0, "offset": [0.002, 0.018, 0.009],
               "points": [[0.001, 0.006, -0.003], [0.002, 0.009, -0.009], [0.003, 0.009, -0.015], [0.003, 0.006, -0.021], [0.003, 0.0, -0.025], [0.003, -0.01, -0.027], [0.003, -0.02, -0.0265], [0.003, -0.028, -0.024], [0.0025, -0.035, -0.02], [0.002, -0.04, -0.015]],
@@ -89,19 +92,18 @@
         }
       ]
     },
-    {"kind": "chain", "name": "neck_muscle", "mirror": true, "rigid": true, "attach": "mNeck", "offset": [0.042, 0.035, -0.028], "points": [[-0.032, -0.115, 0.05]], "radius": [0.012, 0.01]},
     {
-      "kind": "chain", "name": "arm", "mirror": true, "attach": "mChest", "at": 0.8, "offset": [0.02, 0, -0.015],
+      "kind": "chain", "name": "arm", "mirror": true, "attach": "mChest", "at": 0.8, "offset": [0.02, -0.007, -0.01],
       "points": [
-        ["$shoulder_width", 0.01, -0.005], ["$shoulder_width+$arm_length*0.52", 0, -0.01],
-        ["$shoulder_width+$arm_length", 0, 0], ["$shoulder_width+$arm_length+0.085*$hand_size", -0.005, 0]
+        ["$shoulder_width", -0.01, 0.006], ["$shoulder_width+$arm_length*0.52", -0.01, 0.006],
+        ["$shoulder_width+$arm_length", -0.01, 0.006], ["$shoulder_width+$arm_length+0.085*$hand_size", -0.015, 0.006]
       ],
       "bones": ["mCollarLeft", "mShoulderLeft", "mElbowLeft", "mWristLeft"],
-      "radius": ["0.05*$build", "0.048*$build", "0.04*$build", 0.03, 0.026], "limits": {"bend": [-90, 90], "side": [-90, 90]}
+      "radius": ["0.05*$build", "0.042*$build", "0.033*$build", 0.026, 0.024], "limits": {"bend": [-90, 90], "side": [-90, 90]}
     },
-    {"kind": "blob", "name": "deltoid", "mirror": true, "attach": "mShoulderLeft", "at": 0.1, "radii": ["0.055*$build", "0.05*$build", "0.052*$build"], "bone": false},
-    {"kind": "blob", "name": "biceps", "mirror": true, "attach": "mShoulderLeft", "at": 0.5, "axis": [1, 0, 0], "radii": ["0.045*$build", "0.043*$build", 0.13], "bone": false},
-    {"kind": "blob", "name": "forearm", "mirror": true, "attach": "mElbowLeft", "at": 0.3, "axis": [1, 0, 0], "radii": ["0.04*$build", "0.035*$build", 0.12], "bone": false},
+    {"kind": "blob", "name": "shoulder", "mirror": true, "attach": "mShoulderLeft", "at": 0.1, "radii": ["0.05*$build", "0.047*$build", "0.048*$build"], "bone": false},
+    {"kind": "blob", "name": "upper_arm", "mirror": true, "attach": "mShoulderLeft", "at": 0.5, "axis": [1, 0, 0], "radii": ["0.04*$build", "0.038*$build", 0.13], "bone": false},
+    {"kind": "blob", "name": "forearm", "mirror": true, "attach": "mElbowLeft", "at": 0.3, "axis": [1, 0, 0], "radii": ["0.032*$build", "0.028*$build", 0.12], "bone": false},
     {"kind": "blob", "name": "palm", "mirror": true, "attach": "mWristLeft", "at": 0.55, "axis": [1, 0, 0], "radii": ["0.043*$hand_size", "0.015*$hand_size", "0.052*$hand_size"], "bone": false, "blend": 0.015},
     {
       "kind": "chain", "name": "index", "mirror": true, "attach": "mWristLeft", "offset": [0, 0, "0.028*$hand_size"],
@@ -134,17 +136,113 @@
       "blend": 0.01, "limits": {"bend": [-60, 20]}
     },
     {
-      "kind": "chain", "name": "leg", "mirror": true, "attach": "mPelvis", "at": 0, "offset": ["0.09*$build", -0.055, 0],
+      "kind": "chain", "name": "leg", "mirror": true, "attach": "mPelvis", "at": 0, "offset": ["0.085*$build", -0.055, -0.005],
       "points": [
-        [0.005, "-($hip_height-0.135)*0.52", 0.012], [0.01, "-($hip_height-0.135)", -0.02],
-        [0.012, "-$hip_height+0.075", 0.1], [0.012, "-$hip_height+0.075", 0.16]
+        [-0.008, "-($hip_height-0.121)*0.535", -0.029], [-0.013, "-($hip_height-0.121)", -0.03],
+        [0.023, "-$hip_height+0.072", 0.091], [0.023, "-$hip_height+0.072", 0.15]
       ],
-      "bones": ["mHipLeft", "mKneeLeft", "mAnkleLeft", "mFootLeft"], "radius": ["0.075*$build", "0.05*$build", 0.04, 0.025, 0.02],
+      "bones": ["mHipLeft", "mKneeLeft", "mAnkleLeft", "mFootLeft"], "radius": ["0.072*$build", "0.047*$build", 0.037, 0.025, 0.02],
       "limits": {"bend": [-120, 30], "side": [-45, 45]}
     },
-    {"kind": "blob", "name": "thigh", "mirror": true, "attach": "mHipLeft", "at": 0.4, "offset": [0, 0, 0.005], "radii": ["0.078*$build", 0.2, "0.082*$build"], "bone": false},
-    {"kind": "blob", "name": "calf", "mirror": true, "attach": "mKneeLeft", "at": 0.33, "offset": [0, 0, -0.012], "radii": ["0.053*$build", 0.13, "0.057*$build"], "bone": false},
-    {"kind": "blob", "name": "foot", "mirror": true, "attach": "mAnkleLeft", "at": 0.45, "offset": [0, -0.028, 0], "radii": [0.043, 0.03, 0.105], "bone": false, "blend": 0.02},
-    {"kind": "blob", "name": "heel", "mirror": true, "attach": "mAnkleLeft", "at": 0, "offset": [0, -0.05, -0.03], "radii": [0.035, 0.03, 0.04], "bone": false, "blend": 0.02}
+    {"kind": "blob", "name": "thigh", "mirror": true, "attach": "mHipLeft", "at": 0.4, "offset": [0, 0, 0.005], "radii": ["0.073*$build", 0.2, "0.077*$build"], "bone": false},
+    {"kind": "blob", "name": "calf", "mirror": true, "attach": "mKneeLeft", "at": 0.33, "offset": [0, 0, -0.012], "radii": ["0.049*$build", 0.13, "0.053*$build"], "bone": false},
+    {"kind": "blob", "name": "foot", "mirror": true, "attach": "mAnkleLeft", "at": 0.45, "offset": [0, -0.028, 0], "radii": [0.037, 0.026, 0.1], "bone": false, "blend": 0.02},
+    {"kind": "blob", "name": "heel", "mirror": true, "attach": "mAnkleLeft", "at": 0, "offset": [0, -0.05, -0.03], "radii": [0.031, 0.027, 0.037], "bone": false, "blend": 0.02},
+    {
+      "kind": "scope", "name": "musculature",
+      "parts": [
+        {"kind": "muscle", "name": "pec_clavicular", "mirror": true, "origin": {"attach": "mCollarLeft", "at": 0.169, "offset": [-0.0015, 0.0249, 0.0779]}, "insertion": {"attach": "mShoulderLeft", "at": 0.168, "offset": [-0.0, 0.0266, 0.0277]}, "size": ["0.0187*$muscle", "0.0164*$muscle"], "normal": [0.388, 0.911, -0.143], "belly": [0.32, 0.57], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "pec_sternal", "mirror": true, "smooth": 0.035, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mChest", "at": 0.197, "offset": [0.0461, 0.0088, 0.1481]}, "insertion": {"attach": "mShoulderLeft", "at": 0.134, "offset": [-0.0, 0.0122, 0.0454]}, "size": ["0.0401*$muscle", "0.0176*$muscle"], "normal": [0.493, 0.268, 0.828], "belly": [0.3, 0.42]},
+            {"origin": {"attach": "mChest", "at": 0.47, "offset": [0.007, 0.008, 0.134]}, "insertion": {"attach": "mShoulderLeft", "at": 0.02, "offset": [0.0, -0.0096, 0.0439]}, "size": ["0.0475*$muscle", "0.0213*$muscle"], "normal": [0.454, 0.262, 0.851], "belly": [0.3, 0.58]}
+          ]},
+        {"kind": "muscle", "name": "pec_abdominal", "mirror": true, "origin": {"attach": "mChest", "at": 0.0, "offset": [0.0745, 0.0044, 0.1285]}, "insertion": {"attach": "mShoulderLeft", "at": 0.12, "offset": [0.0, -0.0031, 0.0141]}, "size": ["0.0181*$muscle", "0.0148*$muscle"], "normal": [0.002, 0.637, 0.771], "belly": 0.3, "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "rectus_abdominis_1", "mirror": true, "origin": {"attach": "mTorso", "at": 0.023, "offset": [0.0416, 0.0029, 0.0996]}, "insertion": {"attach": "mPelvis", "at": 0.0, "offset": [0.0145, -0.0561, 0.0568]}, "size": ["0.0306*$muscle", "0.0126*0.5*$muscle"], "normal": [0.367, -0.267, 0.891], "belly": [0.3, 0.38], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "rectus_abdominis_2", "mirror": true, "origin": {"attach": "mTorso", "at": 0.495, "offset": [0.0391, 0.0032, 0.1069]}, "insertion": {"attach": "mTorso", "at": 0.046, "offset": [0.037, 0.0028, 0.0951]}, "size": ["0.0320*$muscle", "0.0093*$muscle"], "normal": [0.303, -0.127, 0.945], "belly": [0.38, 0.68], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "rectus_abdominis_3", "mirror": true, "origin": {"attach": "mTorso", "at": 0.919, "offset": [0.0464, 0.0036, 0.1209]}, "insertion": {"attach": "mTorso", "at": 0.499, "offset": [0.0364, 0.0032, 0.1089]}, "size": ["0.0328*$muscle", "0.0177*$muscle"], "normal": [0.468, -0.186, 0.864], "belly": [0.58, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "rectus_abdominis_4", "mirror": true, "origin": {"attach": "mTorso", "at": 0.893, "offset": [0.0306, 0.0036, 0.122]}, "insertion": {"attach": "mChest", "at": 0.213, "offset": [0.0722, 0.0073, 0.123]}, "size": ["0.0406*$muscle", "0.0078*$muscle"], "normal": [0.038, 0.017, 0.999], "belly": [0.3, 0.38], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "external_oblique", "mirror": true, "smooth": 0.035, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mTorso", "at": 0.666, "offset": [0.1206, -0.0006, -0.021]}, "insertion": {"attach": "mPelvis", "at": 0.508, "offset": [0.0978, 0.006, 0.1205]}, "size": ["0.0783*$muscle", "0.0366*$muscle"], "normal": [0.858, 0.282, 0.43], "belly": [0.38, 0.52]},
+            {"origin": {"attach": "mChest", "at": 0.227, "offset": [0.1126, 0.0064, 0.1084]}, "insertion": {"attach": "mTorso", "at": 0.539, "offset": [0.1243, 0.0012, 0.042]}, "size": ["0.0809*$muscle", "0.0192*$muscle"], "normal": [0.909, -0.097, 0.406], "belly": [0.62, 0.7]}
+          ]},
+        {"kind": "muscle", "name": "serratus_anterior", "mirror": true, "smooth": 0.006, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mChest", "at": 0.166, "offset": [0.1508, 0.0023, 0.0383]}, "insertion": {"attach": "mChest", "at": 0.067, "offset": [0.1239, -0.0033, -0.056]}, "size": ["0.0405*$muscle", "0.0063*$muscle"], "normal": [0.954, -0.224, -0.199], "belly": [0.38, 0.53]},
+            {"origin": {"attach": "mChest", "at": 0.389, "offset": [0.1362, -0.0018, -0.0295]}, "insertion": {"attach": "mChest", "at": 0.189, "offset": [0.1003, -0.0045, -0.0752]}, "size": ["0.0434*$muscle", "0.0046*$muscle"], "normal": [0.804, -0.066, -0.591], "belly": [0.47, 0.7]},
+            {"origin": {"attach": "mChest", "at": 0.307, "offset": [0.1339, 0.0039, 0.0658]}, "insertion": {"attach": "mChest", "at": 0.396, "offset": [0.1438, -0.001, -0.016]}, "size": ["0.0381*$muscle", "0.0099*$muscle"], "normal": [0.993, -0.046, 0.108], "belly": [0.37, 0.7]},
+            {"origin": {"attach": "mChest", "at": 0.367, "offset": [0.1054, -0.0043, -0.0717]}, "insertion": {"attach": "mChest", "at": 0.668, "offset": [0.0968, -0.0033, -0.0547]}, "size": ["0.0315*$muscle", "0.0219*$muscle"], "normal": [0.14, 0.16, -0.977], "belly": [0.3, 0.58]},
+            {"origin": {"attach": "mChest", "at": 0.411, "offset": [0.1369, -0.0019, -0.0313]}, "insertion": {"attach": "mChest", "at": 0.689, "offset": [0.1188, 0.0009, 0.0145]}, "size": ["0.0106*$muscle", "0.0405*$muscle"], "normal": [0.429, -0.346, 0.835], "belly": [0.42, 0.62]},
+            {"origin": {"attach": "mChest", "at": 0.693, "offset": [0.0951, -0.0041, -0.0689]}, "insertion": {"attach": "mChest", "at": 0.868, "offset": [0.097, 0.0016, 0.0272]}, "size": ["0.0322*$muscle", "0.0200*$muscle"], "normal": [0.358, 0.809, -0.465], "belly": [0.3, 0.38]}
+          ]},
+        {"kind": "muscle", "name": "latissimus", "mirror": true, "smooth": 0.035, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mPelvis", "at": 0.634, "offset": [0.0603, -0.0035, -0.0696]}, "insertion": {"attach": "mShoulderLeft", "at": 0.225, "offset": [-0.0, 0.0059, -0.0027]}, "size": ["0.0204*$muscle", "0.0109*$muscle"], "normal": [0.925, -0.312, -0.219], "belly": [0.47, 0.7]},
+            {"origin": {"attach": "mPelvis", "at": 0.445, "offset": [-0.0054, -0.0045, -0.0897]}, "insertion": {"attach": "mShoulderLeft", "at": 0.301, "offset": [0.0, -0.019, -0.0365]}, "size": ["0.0323*$muscle", "0.0224*$muscle"], "normal": [0.714, -0.31, -0.628], "belly": [0.3, 0.7]},
+            {"origin": {"attach": "mTorso", "at": 0.725, "offset": [-0.0205, -0.0031, -0.1051]}, "insertion": {"attach": "mShoulderLeft", "at": 0.165, "offset": [0.0, -0.0078, -0.0559]}, "size": ["0.0634*$muscle", "0.0139*$muscle"], "normal": [0.117, 0.035, -0.992], "belly": [0.3, 0.53]}
+          ]},
+        {"kind": "muscle", "name": "trapezius_upper", "mirror": true, "origin": {"attach": "mNeck", "at": 0.972, "offset": [-0.0199, 0.0056, -0.056]}, "insertion": {"attach": "mCollarLeft", "at": 0.391, "offset": [0.0018, 0.0132, -0.0235]}, "size": ["0.0395*$muscle", "0.0183*$muscle"], "normal": [0.622, 0.335, -0.707], "belly": [0.57, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "trapezius_middle", "mirror": true, "origin": {"attach": "mCollarLeft", "at": 0.916, "offset": [0.0038, 0.0354, -0.0351]}, "insertion": {"attach": "mCollarLeft", "at": 0.0, "offset": [-0.0185, 0.0236, -0.0759]}, "size": ["0.0291*$muscle", "0.0082*$muscle"], "normal": [0.221, 0.564, -0.795], "belly": [0.47, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "trapezius_lower", "mirror": true, "origin": {"attach": "mTorso", "at": 0.87, "offset": [-0.0002, -0.0033, -0.1102]}, "insertion": {"attach": "mCollarLeft", "at": 0.296, "offset": [0.0048, 0.027, -0.0756]}, "size": ["0.0563*$muscle", "0.0170*$muscle"], "normal": [-0.207, 0.105, -0.973], "belly": 0.7, "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "infraspinatus", "mirror": true, "origin": {"attach": "mCollarLeft", "at": 0.359, "offset": [-0.0014, -0.073, -0.0875]}, "insertion": {"attach": "mCollarLeft", "at": 1.0, "offset": [0.0059, 0.0267, -0.0234]}, "size": ["0.0297*$muscle", "0.0166*$muscle"], "normal": [0.474, 0.11, -0.873], "belly": [0.3, 0.52], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "teres_major", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.184, "offset": [-0.0, 0.0023, 0.0079]}, "insertion": {"attach": "mShoulderLeft", "at": 0.367, "offset": [0.0, -0.0807, -0.072]}, "size": ["0.0104*$muscle", "0.0093*$muscle"], "normal": [0.579, 0.723, -0.378], "belly": [0.3, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "erector_longissimus", "mirror": true, "smooth": 0.015, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mTorso", "at": 0.945, "offset": [0.0321, -0.0019, -0.0633]}, "insertion": {"attach": "mPelvis", "at": 0.125, "offset": [0.0065, -0.0029, -0.0585]}, "size": ["0.0154*$muscle", "0.0129*$muscle"], "normal": [-0.25, -0.028, -0.968], "belly": [0.3, 0.48]},
+            {"origin": {"attach": "mTorso", "at": 0.952, "offset": [0.0363, -0.0024, -0.0825]}, "insertion": {"attach": "mChest", "at": 0.942, "offset": [0.0509, -0.0035, -0.0593]}, "size": ["0.0175*$muscle", "0.0121*$muscle"], "normal": [-0.577, 0.057, -0.815], "belly": [0.3, 0.38]}
+          ]},
+        {"kind": "muscle", "name": "erector_iliocostalis", "mirror": true, "origin": {"attach": "mPelvis", "at": 0.0, "offset": [0.0168, -0.0223, -0.0615]}, "insertion": {"attach": "mChest", "at": 0.28, "offset": [0.0936, -0.0034, -0.0565]}, "size": ["0.0232*$muscle", "0.0104*$muscle"], "normal": [-0.088, -0.007, -0.996], "belly": [0.3, 0.43], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "sternocleidomastoid", "mirror": true, "origin": {"attach": "mHead", "at": 0.078, "offset": [0.0552, 0.0258, -0.0193]}, "insertion": {"attach": "mChest", "at": 0.76, "offset": [0.0162, 0.0044, 0.0736]}, "size": ["0.0149*$muscle", "0.0090*$muscle"], "normal": [0.456, 0.272, 0.847], "belly": [0.37, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "levator_scapulae", "mirror": true, "origin": {"attach": "mNeck", "at": 0.718, "offset": [0.0286, -0.0013, 0.0127]}, "insertion": {"attach": "mCollarLeft", "at": 0.335, "offset": [0.0029, 0.0079, -0.0581]}, "size": ["0.0150*$muscle", "0.0053*$muscle"], "normal": [0.075, 0.58, -0.811], "belly": 0.7, "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "deltoid_front", "mirror": true, "origin": {"attach": "mCollarLeft", "at": 0.639, "offset": [0.0026, 0.0522, 0.0223]}, "insertion": {"attach": "mShoulderLeft", "at": 0.241, "offset": [-0.0, 0.042, 0.0418]}, "size": ["0.0206*$muscle", "0.0166*$muscle"], "normal": [0.532, 0.584, 0.613], "belly": [0.43, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "deltoid_side", "mirror": true, "origin": {"attach": "mCollarLeft", "at": 1.0, "offset": [0.0271, 0.0402, -0.0053]}, "insertion": {"attach": "mShoulderLeft", "at": 0.357, "offset": [-0.0, 0.0447, 0.0151]}, "size": ["0.0264*$muscle", "0.0143*$muscle"], "normal": [0.702, 0.271, 0.659], "belly": [0.38, 0.68], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "deltoid_rear", "mirror": true, "origin": {"attach": "mCollarLeft", "at": 0.776, "offset": [0.0043, 0.0205, -0.0731]}, "insertion": {"attach": "mShoulderLeft", "at": 0.359, "offset": [-0.0, 0.0577, -0.0148]}, "size": ["0.0385*$muscle", "0.0180*$muscle"], "normal": [0.705, 0.336, -0.625], "belly": [0.38, 0.67], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "biceps", "mirror": true, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mShoulderLeft", "at": 0.0, "offset": [-0.0245, 0.0126, 0.0234]}, "insertion": {"attach": "mElbowLeft", "at": 0.139, "offset": [-0.0, 0.0177, -0.007]}, "size": ["0.0174*$muscle", "0.0157*$muscle"], "normal": [0.005, 0.609, 0.793], "belly": [0.48, 0.62]},
+            {"origin": {"attach": "mCollarLeft", "at": 0.903, "offset": [-0.0004, 0.0041, 0.0177]}, "insertion": {"attach": "mShoulderLeft", "at": 0.856, "offset": [0.0, -0.0108, 0.0243]}, "size": ["0.0173*$muscle", "0.0129*$muscle"], "normal": [-0.946, -0.179, 0.271], "belly": [0.52, 0.7]}
+          ]},
+        {"kind": "muscle", "name": "brachialis", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.417, "offset": [-0.0, 0.0143, -0.0021]}, "insertion": {"attach": "mElbowLeft", "at": 0.155, "offset": [0.0, 0.0, 0.0084]}, "size": ["0.0137*$muscle", "0.0304*$muscle"], "normal": [-0.125, -0.938, 0.323], "belly": [0.38, 0.68], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "triceps", "mirror": true, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mShoulderLeft", "at": 0.075, "offset": [0.0, -0.019, -0.0333]}, "insertion": {"attach": "mShoulderLeft", "at": 0.988, "offset": [0.0, -0.0057, -0.0374]}, "size": ["0.0203*$muscle", "0.0162*$muscle"], "normal": [0.03, -0.772, -0.635], "belly": [0.38, 0.62]},
+            {"origin": {"attach": "mShoulderLeft", "at": 0.954, "offset": [-0.0, 0.0168, -0.0313]}, "insertion": {"attach": "mShoulderLeft", "at": 0.14, "offset": [-0.0, 0.0174, -0.0253]}, "size": ["0.0206*$muscle", "0.0167*$muscle"], "normal": [0.001, 0.999, -0.048], "belly": [0.42, 0.7]},
+            {"origin": {"attach": "mShoulderLeft", "at": 0.265, "offset": [0.0, -0.0094, -0.0096]}, "insertion": {"attach": "mElbowLeft", "at": 0.011, "offset": [0.0, -0.0229, 0.0049]}, "size": ["0.0105*$muscle", "0.0188*$muscle"], "normal": [-0.034, -0.988, -0.151], "belly": [0.47, 0.7]}
+          ]},
+        {"kind": "muscle", "name": "brachioradialis", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.693, "offset": [-0.0, 0.0319, -0.0014]}, "insertion": {"attach": "mElbowLeft", "at": 0.858, "offset": [-0.0, 0.0286, -0.0225]}, "size": ["0.0196*$muscle", "0.0109*$muscle"], "normal": [-0.163, 0.654, 0.739], "belly": [0.32, 0.47], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "ext_carpi_radialis_longus", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.855, "offset": [-0.0, 0.0401, -0.0185]}, "insertion": {"attach": "mElbowLeft", "at": 0.939, "offset": [-0.0, 0.0047, -0.0322]}, "size": ["0.0088*$muscle", "0.0089*$muscle"], "normal": [0.207, 0.447, -0.871], "belly": [0.3, 0.43], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "ext_carpi_radialis_brevis", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.955, "offset": [-0.0, 0.027, -0.0198]}, "insertion": {"attach": "mElbowLeft", "at": 1.0, "offset": [0.0048, -0.0027, -0.0206]}, "size": ["0.0108*$muscle", "0.0057*$muscle"], "normal": [0.209, 0.623, -0.754], "belly": [0.3, 0.47], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "extensor_digitorum", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 1.0, "offset": [0.0075, 0.0272, -0.0355]}, "insertion": {"attach": "mWristLeft", "at": 1.0, "offset": [0.0407, -0.0024, 0.0097]}, "size": ["0.0088*$muscle", "0.0099*$muscle"], "normal": [0.266, 0.789, -0.554], "belly": [0.3, 0.33], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "ext_carpi_ulnaris", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.965, "offset": [-0.0, 0.0182, -0.0331]}, "insertion": {"attach": "mElbowLeft", "at": 1.0, "offset": [0.0022, -0.0275, 0.0145]}, "size": ["0.0077*$muscle", "0.0051*$muscle"], "normal": [0.261, -0.064, -0.963], "belly": [0.3, 0.38], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "anconeus", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.978, "offset": [-0.0, 0.0105, -0.0263]}, "insertion": {"attach": "mElbowLeft", "at": 0.299, "offset": [0.0, -0.0307, -0.0081]}, "size": ["0.0092*$muscle", "0.0063*$muscle"], "normal": [0.052, -0.425, -0.904], "belly": [0.3, 0.58], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "flex_carpi_ulnaris", "mirror": true, "origin": {"attach": "mElbowLeft", "at": 0.01, "offset": [0.0, -0.0247, 0.0152]}, "insertion": {"attach": "mElbowLeft", "at": 1.0, "offset": [0.0045, -0.0076, 0.026]}, "size": ["0.0224*$muscle", "0.0124*$muscle"], "normal": [0.032, -0.838, 0.545], "belly": [0.3, 0.38], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "flex_carpi_radialis", "mirror": true, "origin": {"attach": "mElbowLeft", "at": 1.0, "offset": [0.0101, 0.029, 0.0047]}, "insertion": {"attach": "mShoulderLeft", "at": 0.964, "offset": [0.0, -0.017, 0.0229]}, "size": ["0.0105*$muscle", "0.0062*$muscle"], "normal": [0.03, 0.591, 0.806], "belly": [0.52, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "palmaris_longus", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.978, "offset": [0.0, -0.0316, 0.0208]}, "insertion": {"attach": "mWristLeft", "at": 0.796, "offset": [0.0012, 0.0208, 0.0097]}, "size": ["0.0072*$muscle", "0.0091*$muscle"], "normal": [-0.219, 0.006, 0.976], "belly": 0.3, "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "flex_digitorum_superficialis", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.995, "offset": [0.0, -0.0227, 0.0068]}, "insertion": {"attach": "mWristLeft", "at": 1.0, "offset": [0.0217, 0.0243, 0.0138]}, "size": ["0.0145*$muscle", "0.0126*$muscle"], "normal": [-0.268, -0.029, 0.963], "belly": 0.3, "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "pronator_teres", "mirror": true, "origin": {"attach": "mShoulderLeft", "at": 0.945, "offset": [0.0, -0.017, 0.0208]}, "insertion": {"attach": "mElbowLeft", "at": 0.461, "offset": [-0.0, 0.0232, -0.0241]}, "size": ["0.0097*$muscle", "0.0085*$muscle"], "normal": [-0.166, 0.163, 0.973], "belly": [0.42, 0.67], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "thenar", "mirror": true, "origin": {"attach": "mWristLeft", "at": 0.559, "offset": [0.0028, 0.0477, -0.0176]}, "insertion": {"attach": "mWristLeft", "at": 0.083, "offset": [0.0011, 0.0186, 0.0054]}, "size": ["0.0097*$muscle", "0.0080*$muscle"], "normal": [-0.381, 0.87, 0.312], "belly": [0.47, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "hypothenar", "mirror": true, "origin": {"attach": "mWristLeft", "at": 0.805, "offset": [-0.0001, -0.0025, 0.0465]}, "insertion": {"attach": "mWristLeft", "at": 0.151, "offset": [0.0002, 0.004, 0.0242]}, "size": ["0.0072*$muscle", "0.0075*$muscle"], "normal": [-0.078, 0.829, 0.554], "belly": [0.3, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "gluteus_maximus", "mirror": true, "smooth": 0.04, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mHipLeft", "at": 0.215, "offset": [0.0613, 0.0006, -0.0253]}, "insertion": {"attach": "mHipLeft", "at": 0.05, "offset": [-0.0545, 0.0076, -0.0965]}, "size": ["0.0467*$muscle", "0.0168*$muscle"], "normal": [0.211, -0.439, -0.873], "belly": [0.43, 0.7]},
+            {"origin": {"attach": "mHipLeft", "at": 0.0, "offset": [0.0337, 0.0715, -0.0672]}, "insertion": {"attach": "mHipLeft", "at": 0.048, "offset": [-0.0629, 0.008, -0.0994]}, "size": ["0.0498*$muscle", "0.0221*$muscle"], "normal": [0.345, -0.023, -0.938], "belly": [0.38, 0.7]}
+          ]},
+        {"kind": "muscle", "name": "gluteus_medius", "mirror": true, "origin": {"attach": "mPelvis", "at": 0.76, "offset": [0.0908, -0.0016, -0.0319]}, "insertion": {"attach": "mHipLeft", "at": 0.02, "offset": [0.0521, 0.0013, -0.0337]}, "size": ["0.0472*$muscle", "0.0400*$muscle"], "normal": [0.935, 0.32, -0.154], "belly": [0.3, 0.53], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "tensor_fasciae_latae", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.0, "offset": [0.0403, 0.0964, 0.0398]}, "insertion": {"attach": "mHipLeft", "at": 0.083, "offset": [0.0545, -0.0035, 0.0355]}, "size": ["0.0213*$muscle", "0.0109*$muscle"], "normal": [0.494, 0.006, 0.869], "belly": [0.38, 0.67], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "rectus_femoris", "mirror": true, "origin": {"attach": "mHipLeft", "at": 1.0, "offset": [0.0223, -0.028, 0.0869]}, "insertion": {"attach": "mHipLeft", "at": 0.0, "offset": [0.0386, 0.0426, 0.0318]}, "size": ["0.0308*$muscle", "0.0199*$muscle"], "normal": [-0.216, 0.062, 0.974], "belly": [0.57, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "vastus_lateralis", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.113, "offset": [0.059, -0.0013, 0.0022]}, "insertion": {"attach": "mHipLeft", "at": 0.912, "offset": [0.0425, -0.0033, 0.0359]}, "size": ["0.0409*$muscle", "0.0216*$muscle"], "normal": [0.98, -0.072, -0.184], "belly": [0.33, 0.63], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "vastus_medialis", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.956, "offset": [-0.028, -0.0021, 0.0391]}, "insertion": {"attach": "mHipLeft", "at": 0.22, "offset": [0.0053, -0.0031, 0.0437]}, "size": ["0.0266*$muscle", "0.0187*$muscle"], "normal": [-0.755, 0.041, 0.654], "belly": [0.3, 0.48], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "sartorius", "mirror": true, "smooth": 0.01, "blend": "0.002+0.5*$fat", "heads": [
+            {"origin": {"attach": "mHipLeft", "at": 0.47, "offset": [-0.0382, -0.0023, 0.0441]}, "insertion": {"attach": "mKneeLeft", "at": 0.174, "offset": [-0.033, 0.0004, 0.0083]}, "size": ["0.0113*$muscle", "0.0145*$muscle"], "normal": [-0.998, 0.012, -0.07], "belly": 0.3},
+            {"origin": {"attach": "mHipLeft", "at": 0.0, "offset": [0.0394, 0.0744, 0.0527]}, "insertion": {"attach": "mHipLeft", "at": 0.464, "offset": [-0.0266, -0.0032, 0.0542]}, "size": ["0.0144*$muscle", "0.0060*$muscle"], "normal": [-0.148, -0.005, 0.989], "belly": [0.42, 0.7]}
+          ]},
+        {"kind": "muscle", "name": "gracilis", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.08, "offset": [-0.071, -0.0007, 0.0303]}, "insertion": {"attach": "mKneeLeft", "at": 0.146, "offset": [-0.0431, 0.0006, -0.0183]}, "size": ["0.0165*$muscle", "0.0104*$muscle"], "normal": [-0.694, -0.151, 0.704], "belly": [0.33, 0.57], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "adductor_longus", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.046, "offset": [-0.0554, -0.0026, 0.0526]}, "insertion": {"attach": "mHipLeft", "at": 0.613, "offset": [0.0027, -0.0017, 0.0234]}, "size": ["0.0142*$muscle", "0.0256*$muscle"], "normal": [-0.753, -0.282, 0.595], "belly": [0.43, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "adductor_magnus", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.126, "offset": [-0.0388, 0.0007, 0.0004]}, "insertion": {"attach": "mHipLeft", "at": 0.868, "offset": [-0.0151, -0.0006, 0.0136]}, "size": ["0.0283*$muscle", "0.0338*$muscle"], "normal": [-0.781, -0.06, 0.621], "belly": [0.3, 0.53], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "biceps_femoris", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.139, "offset": [-0.0108, 0.0025, -0.0333]}, "insertion": {"attach": "mKneeLeft", "at": 0.027, "offset": [0.0355, -0.0004, -0.0238]}, "size": ["0.0277*$muscle", "0.0218*$muscle"], "normal": [0.638, 0.098, -0.763], "belly": [0.3, 0.53], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "semitendinosus", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.145, "offset": [-0.0316, 0.0038, -0.0468]}, "insertion": {"attach": "mKneeLeft", "at": 0.153, "offset": [-0.0285, 0.0005, -0.0347]}, "size": ["0.0159*$muscle", "0.0134*$muscle"], "normal": [-0.706, 0.029, -0.707], "belly": [0.3, 0.37], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "semimembranosus", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.172, "offset": [-0.0445, 0.0025, -0.0249]}, "insertion": {"attach": "mKneeLeft", "at": 0.08, "offset": [-0.0222, 0.0004, -0.0181]}, "size": ["0.0258*$muscle", "0.0209*$muscle"], "normal": [-0.824, -0.007, -0.567], "belly": [0.38, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "gastrocnemius_medial", "mirror": true, "origin": {"attach": "mHipLeft", "at": 0.871, "offset": [-0.0162, 0.0021, -0.0269]}, "insertion": {"attach": "mKneeLeft", "at": 0.559, "offset": [-0.0199, 0.0004, -0.0502]}, "size": ["0.0374*$muscle", "0.0194*$muscle"], "normal": [-0.938, 0.063, -0.341], "belly": [0.42, 0.68], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "gastrocnemius_lateral", "mirror": true, "origin": {"attach": "mKneeLeft", "at": 0.537, "offset": [0.0349, -0.0003, -0.064]}, "insertion": {"attach": "mHipLeft", "at": 0.894, "offset": [0.0265, 0.0022, -0.0397]}, "size": ["0.0288*$muscle", "0.0158*$muscle"], "normal": [0.557, 0.105, -0.824], "belly": [0.33, 0.62], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "soleus", "mirror": true, "origin": {"attach": "mKneeLeft", "at": 0.766, "offset": [-0.0072, 0.0002, -0.0311]}, "insertion": {"attach": "mKneeLeft", "at": 0.12, "offset": [0.0141, -0.0001, -0.0197]}, "size": ["0.0253*$muscle", "0.0400*$muscle"], "normal": [-0.679, 0.033, 0.733], "belly": [0.42, 0.7], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "calcaneal_tendon", "mirror": true, "origin": {"attach": "mKneeLeft", "at": 1.0, "offset": [-0.0034, -0.0309, -0.0458]}, "insertion": {"attach": "mKneeLeft", "at": 0.547, "offset": [0.0063, 0.0, -0.0404]}, "size": ["0.0193*$muscle", "0.0125*$muscle"], "normal": [-0.697, 0.064, -0.714], "belly": 0.7, "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "tibialis_anterior", "mirror": true, "origin": {"attach": "mKneeLeft", "at": 0.102, "offset": [0.0324, -0.0005, 0.024]}, "insertion": {"attach": "mAnkleLeft", "at": 0.14, "offset": [0.0045, -0.0031, -0.0026]}, "size": ["0.0125*$muscle", "0.0167*$muscle"], "normal": [-0.277, -0.008, 0.961], "belly": [0.3, 0.42], "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "fibularis_longus", "mirror": true, "origin": {"attach": "mKneeLeft", "at": 0.128, "offset": [0.0527, -0.0007, -0.0136]}, "insertion": {"attach": "mAnkleLeft", "at": 0.061, "offset": [0.0299, -0.0321, -0.0219]}, "size": ["0.0148*$muscle", "0.0115*$muscle"], "normal": [0.969, -0.067, -0.239], "belly": 0.3, "blend": "0.002+0.5*$fat"},
+        {"kind": "muscle", "name": "extensor_digitorum_longus", "mirror": true, "origin": {"attach": "mKneeLeft", "at": 0.077, "offset": [0.0384, -0.0005, 0.0044]}, "insertion": {"attach": "mKneeLeft", "at": 0.914, "offset": [0.0291, -0.0004, -0.0013]}, "size": ["0.0085*$muscle", "0.0076*$muscle"], "normal": [0.939, -0.048, 0.341], "belly": 0.3, "blend": "0.002+0.5*$fat"}
+      ]
+    }
   ]
 }

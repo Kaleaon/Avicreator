@@ -239,7 +239,7 @@ void main() {
     for (int i = 0; i < 256; i++) {
       float d = map(ro + rd * t);
       if (d < 0.00025 * uScale * (1.0 + t)) { tHit = t; break; }
-      t += d * 0.9;
+      t += d * 0.9 / LIPSCHITZ;
       if (t > bh.y) break;
     }
   }

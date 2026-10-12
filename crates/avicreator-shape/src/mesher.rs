@@ -54,7 +54,8 @@ const SUB: usize = 4;
 const PTS: usize = BLOCK + 1;
 /// Safety factor on the distance bound used to skip regions. Round cones and
 /// slabs are exact distances and smooth min/max are convex blends, so only
-/// the ellipsoid bound is approximate.
+/// the ellipsoid bound is approximate; muscle relief multiplies in the
+/// shape's own factor (`CompiledShape::lipschitz`).
 const LIPSCHITZ: f32 = 1.25;
 pub const MAX_RESOLUTION: u32 = 2048;
 
@@ -180,6 +181,7 @@ pub fn mesh(shape: &CompiledShape, opts: MeshOptions) -> MeshResult {
         let reach = region.inflate(cull_margin);
         from.iter().copied().filter(|&i| shape.prims[i as usize].bounds.intersects(&reach)).collect()
     };
+    let lipschitz = LIPSCHITZ * shape.lipschitz();
     let far = |active: &[u32], region: &Aabb| -> bool {
         if !opts.accelerate {
             return false;
@@ -190,7 +192,7 @@ pub fn mesh(shape: &CompiledShape, opts: MeshOptions) -> MeshResult {
         let d = shape.distance_subset(region.center(), active);
         // The 2h margin keeps every point of a skipped region farther from the
         // surface than any sign-changing edge can be, so no quad loses a cell.
-        d.abs() > LIPSCHITZ * region.size().length() * 0.5 + 2.0 * h
+        d.abs() > lipschitz * region.size().length() * 0.5 + 2.0 * h
     };
     let subs_in = |lo: [usize; 3], hi: [usize; 3], step: usize| -> usize {
         (0..3).map(|a| (hi[a] - lo[a]).div_ceil(step)).product()
@@ -383,12 +385,18 @@ pub fn mesh(shape: &CompiledShape, opts: MeshOptions) -> MeshResult {
             let (mut p, i) = simplify(&positions, &indices, target);
             stats.simplify_millis = timer.millis();
             // Simplified vertices sit near the surface; settle them onto it.
+            // A weak gradient (in a crease, or where relief cancels the
+            // slope beneath it) would make the Newton step huge, so steps
+            // longer than the vertex's own neighbourhood are skipped.
             for v in p.iter_mut() {
                 let d = shape.distance(*v);
                 let g = shape.gradient(*v, h * 0.25);
                 let g2 = g.length_squared();
                 if g2 > 1e-8 && d.abs() < 2.0 * h {
-                    *v = v.sub(g.scale(d / g2));
+                    let step = g.scale(d / g2);
+                    if step.length() <= 2.0 * h {
+                        *v = v.sub(step);
+                    }
                 }
             }
             (p, i)

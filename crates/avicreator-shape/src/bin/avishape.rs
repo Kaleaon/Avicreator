@@ -13,6 +13,8 @@ avishape — rig-aware implicit shape programs
 
 USAGE:
   avishape check  <program.json> [--set NAME=VALUE]...
+  avishape skeleton <program.json> [--set NAME=VALUE]...
+  avishape probe  <program.json> X Y Z [--set NAME=VALUE]...
   avishape build  <program.json> [--out DIR] [--resolution N] [--triangles N] [--set NAME=VALUE]... [--no-anim]
   avishape studio <program.json> [--port PORT]
   avishape compare <program.json> <reference.obj|glb> [PLACEMENT] [--samples N] [--set NAME=VALUE]...
@@ -23,6 +25,10 @@ Any command takes --pose NAME to compile in one of the program's named poses (e.
 match a reference standing in anatomical position rather than T-pose).
 
 check   Validate the program and list its parts, bones and sizes (no meshing).
+probe   Print the field at a point and the parts nearest it (for a muscle,
+        how far it raises the surface there), to find what shapes a spot.
+skeleton Print the compiled bones as JSON (name, parent, head, tail, and the pose
+        rotation each carries), for tools that place things relative to them.
 build   Write <name>.glb (skinned mesh + skeleton + 'flex' clip), <name>.html
         (standalone raymarched preview) and <name>.glsl into DIR (default: .).
         Programs targeting the second_life skeleton also get <name>.dae, rigged
@@ -54,6 +60,7 @@ struct Args {
     match_height: bool,
     landmarks: Option<PathBuf>,
     pose: Option<String>,
+    point: Option<[f32; 3]>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -63,6 +70,15 @@ fn parse_args() -> Result<Args, String> {
         return Err(String::new());
     }
     let program = PathBuf::from(it.next().ok_or("missing program path")?);
+    let mut point = None;
+    if command == "probe" {
+        let mut xyz = [0.0f32; 3];
+        for v in &mut xyz {
+            let arg = it.next().ok_or("probe needs X Y Z")?;
+            *v = arg.parse().map_err(|_| format!("probe: '{}' is not a number", arg))?;
+        }
+        point = Some(xyz);
+    }
     let reference = if command == "compare" || command == "fit" {
         Some(PathBuf::from(it.next().ok_or("missing reference mesh path")?))
     } else {
@@ -86,6 +102,7 @@ fn parse_args() -> Result<Args, String> {
         match_height: false,
         landmarks: None,
         pose: None,
+        point,
     };
     while let Some(flag) = it.next() {
         let mut value = |name: &str| it.next().ok_or(format!("{} needs a value", name));
@@ -152,6 +169,40 @@ fn run(args: Args) -> Result<(), String> {
                     p.shape.bones.iter().filter(|b| p.shape.parts[b.part].name == part.name).map(|b| b.name.as_str()).collect();
                 println!("  - {:<18} {:<9} {:>3} prims  {}", part.name, part.kind, part.prims.len(), bones.join(" "));
             }
+            Ok(())
+        }
+        "probe" => {
+            let [x, y, z] = args.point.unwrap();
+            let q = avicreator_core::Vec3::new(x, y, z);
+            let shape = &p.shape;
+            println!("field {:+.4} m at ({}, {}, {})", shape.distance(q), x, y, z);
+            let mut near: Vec<(f32, usize)> =
+                (0..shape.parts.len()).map(|i| (shape.part_distance(i, q), i)).collect();
+            near.sort_by(|a, b| a.0.total_cmp(&b.0));
+            for (d, i) in near.into_iter().take(12) {
+                let part = &shape.parts[i];
+                let what = if part.relief { format!("raises {:+.4}", -d) } else { format!("distance {:+.4}", d) };
+                println!("  {:<28} {:<8} group {:<4} {}", part.name, part.kind, part.group.map_or("-".into(), |g| g.to_string()), what);
+            }
+            Ok(())
+        }
+        "skeleton" => {
+            let bones: Vec<serde_json::Value> = p
+                .shape
+                .bones
+                .iter()
+                .map(|b| {
+                    serde_json::json!({
+                        "name": b.name,
+                        "parent": b.parent.map(|i| p.shape.bones[i].name.clone()),
+                        "head": [b.head.x, b.head.y, b.head.z],
+                        "tail": [b.tail.x, b.tail.y, b.tail.z],
+                        "pose": b.pose.to_array(),
+                    })
+                })
+                .collect();
+            let doc = serde_json::json!({ "name": p.shape.name, "pose": args.pose, "bones": bones });
+            println!("{}", serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?);
             Ok(())
         }
         "build" => {

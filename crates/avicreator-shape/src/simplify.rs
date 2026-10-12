@@ -93,6 +93,9 @@ struct State {
     vert_faces: Vec<Vec<u32>>,
     stamp: Vec<u32>,
     alive: Vec<bool>,
+    /// Vertices on non-manifold edges or pinch points, where thin features
+    /// meet. Collapsing them could zip separate surfaces together.
+    locked: Vec<bool>,
     scratch_a: Vec<u32>,
     scratch_b: Vec<u32>,
 }
@@ -148,7 +151,8 @@ impl State {
     }
 
     fn valid(&self, c: &Candidate) -> bool {
-        self.alive[c.u as usize] && self.alive[c.v as usize] && self.stamp_of(c.u, c.v) == c.stamp
+        let (u, v) = (c.u as usize, c.v as usize);
+        self.alive[u] && self.alive[v] && !self.locked[u] && !self.locked[v] && self.stamp_of(c.u, c.v) == c.stamp
     }
 
     fn normal(&self, f: &[u32; 3], moved: u32, to: [f64; 3]) -> [f64; 3] {
@@ -230,6 +234,65 @@ impl State {
     }
 }
 
+/// Locks the vertices of every edge not shared by exactly two faces, and of
+/// every vertex whose faces form more than one fan (two surfaces pinched
+/// together at a point).
+fn lock_non_manifold(s: &mut State) {
+    let mut fan: Vec<(u32, u32)> = Vec::new();
+    for v in 0..s.pos.len() {
+        // Edges (v, w) of v's faces: each must appear exactly twice, and the
+        // faces must connect into one fan through them.
+        fan.clear();
+        for &f in &s.vert_faces[v] {
+            for &w in s.faces[f as usize].iter().filter(|&&w| w as usize != v) {
+                fan.push((w, f));
+            }
+        }
+        fan.sort_unstable();
+        let mut manifold = true;
+        let mut i = 0;
+        while i < fan.len() {
+            let j = (i..fan.len()).find(|&j| fan[j].0 != fan[i].0).unwrap_or(fan.len());
+            if j - i != 2 {
+                manifold = false;
+                break;
+            }
+            i = j;
+        }
+        if manifold && !s.vert_faces[v].is_empty() {
+            // Walk the fan from one face across shared edges; it must reach all.
+            let faces = &s.vert_faces[v];
+            let mut seen = vec![false; faces.len()];
+            let mut stack = vec![0usize];
+            seen[0] = true;
+            let mut reached = 1;
+            while let Some(k) = stack.pop() {
+                let fk = faces[k];
+                for &(w, f) in &fan {
+                    if f != fk {
+                        continue;
+                    }
+                    for &(w2, f2) in &fan {
+                        if w2 == w && f2 != fk {
+                            if let Some(n) = faces.iter().position(|&x| x == f2) {
+                                if !seen[n] {
+                                    seen[n] = true;
+                                    reached += 1;
+                                    stack.push(n);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            manifold = reached == faces.len();
+        }
+        if !manifold {
+            s.locked[v] = true;
+        }
+    }
+}
+
 /// Simplifies a closed triangle mesh to at most `target` triangles (when
 /// possible) and returns the compacted positions and indices.
 pub fn simplify(positions: &[Vec3], indices: &[u32], target: usize) -> (Vec<Vec3>, Vec<u32>) {
@@ -245,6 +308,7 @@ pub fn simplify(positions: &[Vec3], indices: &[u32], target: usize) -> (Vec<Vec3
         vert_faces: vec![Vec::new(); positions.len()],
         stamp: vec![0; positions.len()],
         alive: vec![true; positions.len()],
+        locked: vec![false; positions.len()],
         scratch_a: Vec::new(),
         scratch_b: Vec::new(),
     };
@@ -255,6 +319,8 @@ pub fn simplify(positions: &[Vec3], indices: &[u32], target: usize) -> (Vec<Vec3
             s.vert_faces[v as usize].push(f as u32);
         }
     }
+
+    lock_non_manifold(&mut s);
 
     let mut heap = BinaryHeap::new();
     for face in &s.faces {
@@ -333,6 +399,31 @@ mod tests {
             tris = next;
         }
         (pos, tris.into_iter().flatten().collect())
+    }
+
+    #[test]
+    fn surfaces_pinched_together_are_not_zipped() {
+        // Two spheres touching at one shared vertex (+X of the first): a
+        // pinch point where both fans meet.
+        let (pos, idx) = sphere(4);
+        let n = pos.len() as u32;
+        let mut all = pos.clone();
+        all.extend(pos.iter().map(|p| Vec3::new(2.0 - p.x, p.y, p.z)));
+        let mut tris: Vec<u32> = idx.clone();
+        for t in idx.chunks_exact(3) {
+            // Mirrored, so reverse the winding; vertex 0 (+X) is shared.
+            for &v in [t[0], t[2], t[1]].iter() {
+                tris.push(if v == 0 { 0 } else { v + n });
+            }
+        }
+        let (p, i) = simplify(&all, &tris, 600);
+        assert!(i.len() / 3 <= 700, "{} triangles", i.len() / 3);
+        for t in i.chunks_exact(3) {
+            let xs = [p[t[0] as usize].x, p[t[1] as usize].x, p[t[2] as usize].x];
+            let (lo, hi) = (xs.iter().cloned().fold(f32::MAX, f32::min), xs.iter().cloned().fold(f32::MIN, f32::max));
+            assert!(lo > 0.99 || hi < 1.01, "triangle spans both spheres: {:?}", xs);
+        }
+        assert!(p.iter().any(|v| (v.sub(Vec3::X)).length() < 1e-6), "the pinch point stays put");
     }
 
     #[test]

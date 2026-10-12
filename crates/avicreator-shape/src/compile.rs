@@ -5,9 +5,10 @@ use std::ops::Range;
 
 use avicreator_core::{Quat, Vec3};
 
+use crate::field::closest_on_segment;
 use crate::program::{
-    ArrayPart, ArrayShape, BlobPart, BoneSpec, ChainPart, Limits, MembranePart, Op, Part, Pivot, Profile, Radii,
-    Resolver, Rotation, Scalar, ScopePart, Settings, ShapeProgram, SkeletonTarget, V3,
+    Anchor, ArrayPart, ArrayShape, Belly, BlobPart, BoneSpec, ChainPart, Limits, MembranePart, MuscleHead, MusclePart, Op, Part, Pivot,
+    Profile, Radii, Resolver, Rotation, Scalar, ScopePart, Settings, ShapeProgram, SkeletonTarget, V3,
 };
 use crate::sdf::{Aabb, Shape};
 use crate::ShapeError;
@@ -77,6 +78,9 @@ pub struct CompiledPart {
     /// Blend group this part belongs to; `None` only for unattached
     /// subtractive parts, which carve the whole shape.
     pub group: Option<usize>,
+    /// Muscles: relief raising their group's surface rather than a solid.
+    /// Their distance is minus the raise, combined by smooth maximum.
+    pub relief: bool,
 }
 
 /// A boned part together with its bone-less add-ons (masses, spikes, feet).
@@ -89,6 +93,9 @@ pub struct Group {
     pub partners: Vec<usize>,
     /// Fillet radius against the partners (the root part's blend).
     pub blend: f32,
+    /// Edge rounding of the group's muscle relief (its largest muscle
+    /// blend), or `None` without muscles.
+    pub relief: Option<f32>,
 }
 
 impl CompiledPart {
@@ -291,10 +298,56 @@ pub fn compile(program: &ShapeProgram) -> Result<CompiledShape, ShapeError> {
         if *own {
             let partners = links.iter().filter_map(|&l| c.parts[l].group).collect();
             c.parts[i].group = Some(groups.len());
-            groups.push(Group { root: i, partners, blend: c.parts[i].blend });
+            groups.push(Group { root: i, partners, blend: c.parts[i].blend, relief: None });
         } else {
             c.parts[i].group = links.first().and_then(|&l| c.parts[l].group);
         }
+    }
+
+    // A muscle raises the group it lies deepest in (the neck for a muscle
+    // anchored on head and chest), judged at the middle of its bellies.
+    for i in 0..c.parts.len() {
+        if !c.parts[i].relief {
+            continue;
+        }
+        let prims = &c.prims[c.parts[i].prims.clone()];
+        let centre = prims
+            .iter()
+            .filter_map(|p| match p.shape {
+                Shape::Muscle { origin, rot, belly, .. } => {
+                    Some(origin.add(rot.rotate_vec3(Vec3::Z).scale((belly[0] + belly[1]) * 0.5)))
+                }
+                _ => None,
+            })
+            .fold(Vec3::ZERO, |a, b| a.add(b))
+            .scale(1.0 / prims.len() as f32);
+        let mut best: Option<(usize, f32)> = None;
+        for part in c.parts.iter().filter(|p| !p.relief && p.op == Op::Union) {
+            let Some(g) = part.group else { continue };
+            let d = c.prims[part.prims.clone()].iter().fold(f32::INFINITY, |d, p| d.min(p.shape.distance(centre)));
+            if best.is_none_or(|(_, b)| d < b) {
+                best = Some((g, d));
+            }
+        }
+        if let Some((g, _)) = best {
+            c.parts[i].group = Some(g);
+            let k = c.parts[i].blend;
+            groups[g].relief = Some(groups[g].relief.map_or(k, |r: f32| r.max(k)));
+        }
+    }
+
+    // Muscle relief reaches past its footprint by the blend that smooths it:
+    // grow its bounds to match, so culled evaluation stays exact.
+    for part in c.parts.iter_mut().filter(|p| p.relief) {
+        let k = part.group.and_then(|g| groups[g].relief).unwrap_or(0.0).max(part.blend);
+        let mut bounds = Aabb::EMPTY;
+        for prim in &mut c.prims[part.prims.clone()] {
+            if let Shape::Muscle { origin, rot, length, belly, radii, height } = prim.shape {
+                prim.bounds = crate::sdf::muscle_bounds(origin, rot, length, belly, radii, height, k.max(part.smooth));
+            }
+            bounds = bounds.union(prim.bounds);
+        }
+        part.bounds = bounds;
     }
 
     let shape = CompiledShape {
@@ -418,6 +471,7 @@ impl<'a> Compiler<'a> {
                     Part::Blob(p) => self.blob(p, m, color),
                     Part::Membrane(p) => self.membrane(p, m, color),
                     Part::Array(p) => self.array(p, m, color),
+                    Part::Muscle(p) => self.muscle(p, m, color),
                     Part::Scope(ScopePart { scale, parts, .. }) => {
                         let s = match scale {
                             Some(s) => self.scalar(s).and_then(|s| positive(s, "scale")).map_err(|e| label(m, e))?,
@@ -621,6 +675,7 @@ impl<'a> Compiler<'a> {
             color,
             bounds,
             group: None,
+            relief: kind == "muscle",
         });
         self.links.push(links);
         debug_assert_eq!(self.parts.len() - 1, index);
@@ -894,6 +949,106 @@ impl<'a> Compiler<'a> {
         self.finish_part(index, &p.name, m, "membrane", Op::Union, blend, 0.0, prim_start, Influence::Nearest { bones }, p.color.unwrap_or(default_color), (spanned, true))
     }
 
+    fn muscle(&mut self, p: &MusclePart, m: Mirror, default_color: [f32; 3]) -> Result<(), String> {
+        let heads = p.head_list()?;
+        let many = heads.len() > 1;
+        let mut shapes = Vec::with_capacity(heads.len());
+        let mut links: Vec<usize> = Vec::new();
+        let mut height_sum = 0.0;
+        for (i, head) in heads.iter().enumerate() {
+            let (shape, bones, height) =
+                self.muscle_head(head, m).map_err(|e| if many { format!("head {}: {}", i, e) } else { e })?;
+            for b in bones {
+                let part = self.bones[b].part;
+                if !links.contains(&part) {
+                    links.push(part);
+                }
+            }
+            height_sum += height;
+            shapes.push(shape);
+        }
+        let smooth = match &p.smooth {
+            Some(k) => self.len(k, m)?,
+            None => height_sum / heads.len() as f32,
+        };
+        let blend = self.blend(&p.blend, self.settings.blend * 0.25, m)?;
+        if smooth < 0.0 {
+            return Err("smooth must be >= 0".into());
+        }
+        let index = self.begin_part(p.name.clone(), m)?;
+        let prim_start = self.prims.len();
+        for shape in shapes {
+            self.push_prim(shape, index, None);
+        }
+        let own = links.is_empty();
+        let color = p.color.unwrap_or(default_color);
+        self.finish_part(index, &p.name, m, "muscle", Op::Union, blend, smooth, prim_start, Influence::None, color, (links, own))
+    }
+
+    /// One belly: its relief, the bones its ends ride on and its height.
+    fn muscle_head(&self, h: &MuscleHead, m: Mirror) -> Result<(Shape, Vec<usize>, f32), String> {
+        let end = |a: &Anchor, which: &str| {
+            self.anchor(&a.from, &a.attach, &a.at, &a.offset, m)
+                .map(|(point, _, bone)| (point, bone))
+                .map_err(|e| format!("{}: {}", which, e))
+        };
+        let (origin, origin_bone) = end(&h.origin, "origin")?;
+        let (insertion, insertion_bone) = end(&h.insertion, "insertion")?;
+        let axis = insertion.sub(origin);
+        let length = axis.length();
+        if length < 1e-3 {
+            return Err("origin and insertion coincide".into());
+        }
+        let z = axis.scale(1.0 / length);
+        let width = positive(self.len(&h.size[0], m)?, "size[0] (half-width)")?;
+        let thickness = positive(self.len(&h.size[1], m)?, "size[1] (half-thickness)")?;
+        let (b0, b1) = match &h.belly {
+            None => (0.5, 0.5),
+            Some(Belly::At(b)) => {
+                let b = self.scalar(b)?;
+                (b, b)
+            }
+            Some(Belly::Span([a, b])) => (self.scalar(a)?, self.scalar(b)?),
+        };
+        if !(0.05 <= b0 && b0 <= b1 && b1 <= 0.95) {
+            return Err(format!("belly must lie within 0.05..0.95, start before end (got {}..{})", b0, b1));
+        }
+
+        // Thickness axis: authored in the rest pose and carried by the
+        // origin's bone, or pointing away from the nearest anchoring bone.
+        let mid = origin.lerp(insertion, (b0 + b1) * 0.5);
+        let normal = match &h.normal {
+            Some(n) => {
+                let n = self.vec(n, m)?;
+                origin_bone.map_or(n, |b| self.bones[b].pose.rotate_vec3(n))
+            }
+            None => [origin_bone, insertion_bone]
+                .into_iter()
+                .flatten()
+                .map(|b| mid.sub(closest_on_segment(mid, self.bones[b].head, self.bones[b].tail)))
+                .find(|n| n.sub(z.scale(n.dot(z))).length_squared() > 1e-8)
+                .unwrap_or(Vec3::Z),
+        };
+        let mut y = normal.sub(z.scale(normal.dot(z)));
+        if y.length_squared() < 1e-8 * normal.length_squared().max(1e-12) {
+            if h.normal.is_some() {
+                return Err("normal points along the muscle; choose a direction across it".into());
+            }
+            y = [Vec3::Z, Vec3::X].into_iter().map(|r| r.sub(z.scale(r.dot(z)))).fold(Vec3::ZERO, |a, b| {
+                if b.length_squared() > a.length_squared() { b } else { a }
+            });
+        }
+        let y = y.normalize();
+        let rot = Quat::from_basis(y.cross(z), y, z);
+        // Raise the surface by the belly's half-thickness, kept to slopes a
+        // distance field can follow (no steeper than about 1:1).
+        let belly = [b0 * length, b1 * length];
+        let height = thickness.min(0.6 * width.min(belly[0]).min(length - belly[1]));
+        let shape = Shape::Muscle { origin, rot, length, belly, radii: [width, thickness], height };
+        let bones = [origin_bone, insertion_bone].into_iter().flatten().collect();
+        Ok((shape, bones, height))
+    }
+
     fn array(&mut self, p: &ArrayPart, m: Mirror, default_color: [f32; 3]) -> Result<(), String> {
         if !(1..=256).contains(&p.count) {
             return Err("count must be between 1 and 256".into());
@@ -1156,6 +1311,81 @@ mod tests {
             compile(&prog).unwrap_err().to_string()
         };
         assert!(err.contains("unknown pose 'nope'"), "{}", err);
+    }
+
+    #[test]
+    fn muscles_span_bones_mirror_and_reform_when_posed() {
+        let json = r#"{
+          "poses": {"flex": {"fore.L": {"bend": 90}}},
+          "parts": [
+            {"kind":"chain","name":"upper","mirror":true,"from":[0.1,1,0],"dir":[1,0,0],"length":0.3,"radius":0.03},
+            {"kind":"chain","name":"fore","mirror":true,"attach":"upper","dir":[1,0,0],"length":0.25,"radius":0.025},
+            {"kind":"muscle","name":"biceps","mirror":true,"origin":{"attach":"upper","at":0.1,"offset":[0,0,0.02]},
+             "insertion":{"attach":"fore","at":0.15,"offset":[0,0,0.01]},"size":[0.025,0.012],"belly":0.4,"blend":0.004}
+          ]}"#;
+        let rest = build(json);
+        let part = |s: &CompiledShape, name: &str| s.parts[s.part_index(name).unwrap()].clone();
+        let (l, r) = (part(&rest, "biceps.L"), part(&rest, "biceps.R"));
+        assert_eq!(l.kind, "muscle");
+        assert!(matches!(l.influence, Influence::None), "muscles leave skinning to the parts underneath");
+        assert_eq!(l.group, part(&rest, "upper.L").group, "raises the arm it lies on");
+        let Shape::Muscle { origin, rot, length, belly, height, .. } = rest.prims[l.prims.start].shape.clone() else {
+            panic!("muscles are reliefs")
+        };
+        assert!((origin.sub(Vec3::new(0.13, 1.0, 0.02)).length()) < 1e-5, "{:?}", origin);
+        assert!((length - 0.3077).abs() < 1e-3 && (belly[0] - 0.4 * length).abs() < 1e-5 && belly[0] == belly[1]);
+        assert!(rot.rotate_vec3(Vec3::Y).z > 0.99, "default normal points away from the bone");
+        // A dome of the belly's half-thickness (as slopes allow) over the
+        // front of the arm, leaving its far side alone.
+        let mid = origin.add(rot.rotate_vec3(Vec3::Z).scale(belly[0]));
+        assert!((height - 0.012).abs() < 1e-6, "{}", height);
+        assert!((rest.part_distance(rest.part_index("biceps.L").unwrap(), mid) + height).abs() < 1e-5);
+        let front = Vec3::new(mid.x, 1.0, 0.035);
+        assert!(rest.distance(front) < -0.005, "raised: {}", rest.distance(front));
+        let back = Vec3::new(mid.x, 1.0, -0.032);
+        assert!((rest.distance(back) - 0.002).abs() < 1e-4, "untouched: {}", rest.distance(back));
+        // The right side is the exact mirror image.
+        let mirror = |v: Vec3| Vec3::new(-v.x, v.y, v.z);
+        for q in [mid, mid.add(Vec3::new(0.01, 0.02, 0.015)), Vec3::new(0.3, 1.01, 0.03)] {
+            let (dl, dr) = (l.prims.start, r.prims.start);
+            assert!((rest.prims[dl].shape.distance(q) - rest.prims[dr].shape.distance(mirror(q))).abs() < 1e-5);
+        }
+        // Flexing the elbow pulls the insertion along: the belly shortens and turns.
+        let mut prog = ShapeProgram::from_json(json).unwrap();
+        prog.pose = Some("flex".into());
+        let posed = compile(&prog).unwrap();
+        for side in ["L", "R"] {
+            let m = part(&posed, &format!("biceps.{}", side));
+            let Shape::Muscle { length: posed_length, .. } = posed.prims[m.prims.start].shape else { unreachable!() };
+            assert!(posed_length < length - 0.02, "{} biceps shortens when flexed: {}", side, posed_length);
+        }
+        let span = build(&json.replace("\"belly\":0.4", "\"belly\":[0.3,0.6]"));
+        let Shape::Muscle { belly, length, .. } = span.prims[span.parts[span.part_index("biceps.L").unwrap()].prims.start].shape
+        else {
+            unreachable!()
+        };
+        assert!((belly[0] - 0.3 * length).abs() < 1e-5 && (belly[1] - 0.6 * length).abs() < 1e-5);
+        // Several heads make one part, merged smoothly.
+        let heads = build(&json.replace(
+            r#""origin":{"attach":"upper","at":0.1,"offset":[0,0,0.02]},
+             "insertion":{"attach":"fore","at":0.15,"offset":[0,0,0.01]},"size":[0.025,0.012],"belly":0.4"#,
+            r#""heads":[
+               {"origin":{"attach":"upper","at":0.1,"offset":[0,0,0.02]},"insertion":{"attach":"fore","at":0.15},"size":[0.02,0.015]},
+               {"origin":{"attach":"upper","at":0.2,"offset":[0,0.01,0.02]},"insertion":{"attach":"fore","at":0.1},"size":[0.02,0.012]}]"#,
+        ));
+        let two = part(&heads, "biceps.R");
+        assert_eq!(two.prims.len(), 2);
+        assert!((two.smooth - 0.012).abs() < 1e-6, "{}", two.smooth);
+        let err = compile(&ShapeProgram::from_json(&json.replace("\"belly\":0.4", "\"belly\":0.4,\"heads\":[]")).unwrap())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("not both"), "{}", err);
+        for bad in ["0.97", "[0.6,0.3]"] {
+            let err = compile(&ShapeProgram::from_json(&json.replace("\"belly\":0.4", &format!("\"belly\":{}", bad))).unwrap())
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("biceps") && err.contains("belly"), "{}", err);
+        }
     }
 
     #[test]

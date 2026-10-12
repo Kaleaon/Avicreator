@@ -18,7 +18,7 @@ use avicreator_core::Vec3;
 
 use crate::compile::{CompiledShape, Influence};
 use crate::program::Op;
-use crate::sdf::{smax, smin};
+use crate::sdf::{muscle_slope, smax, smin, Shape};
 
 /// Distances beyond this are treated as "far outside".
 pub const FAR: f32 = 1e10;
@@ -55,16 +55,21 @@ impl CompiledShape {
     /// Combines part distances (requested in part order; `None` = absent)
     /// through blend groups: smooth within a group, a smooth fillet between a
     /// group and each partner, hard union otherwise, unattached cuts last.
+    /// Muscle relief (smooth maximum of the muscles' raises) lifts its
+    /// group's surface before the group meets its partners.
     fn blend_parts(&self, mut part_distance: impl FnMut(usize) -> Option<f32>) -> f32 {
         const STACK: usize = 128;
         let n = self.groups.len();
         let mut stack = [FAR; STACK];
+        let mut relief_stack = [-FAR; STACK];
         let mut heap = Vec::new();
-        let g: &mut [f32] = if n <= STACK {
-            &mut stack[..n]
+        let mut relief_heap = Vec::new();
+        let (g, relief): (&mut [f32], &mut [f32]) = if n <= STACK {
+            (&mut stack[..n], &mut relief_stack[..n])
         } else {
             heap.resize(n, FAR);
-            &mut heap
+            relief_heap.resize(n, -FAR);
+            (&mut heap, &mut relief_heap)
         };
         let mut cuts: [(usize, f32); 8] = [(0, FAR); 8];
         let mut cut_count = 0;
@@ -72,6 +77,7 @@ impl CompiledShape {
         for (i, part) in self.parts.iter().enumerate() {
             let Some(dp) = part_distance(i) else { continue };
             match part.group {
+                Some(gi) if part.relief => relief[gi] = smax(relief[gi], -dp, part.blend),
                 Some(gi) => g[gi] = combine(g[gi], dp, part.op, part.blend),
                 None if cut_count < cuts.len() => {
                     cuts[cut_count] = (i, dp);
@@ -82,6 +88,9 @@ impl CompiledShape {
         }
         let mut d = FAR;
         for (gi, group) in self.groups.iter().enumerate() {
+            if let Some(k) = group.relief {
+                g[gi] -= smax(relief[gi], 0.0, k);
+            }
             let mut dg = g[gi];
             for &h in &group.partners {
                 dg = dg.min(fillet(g[gi], g[h], group.blend));
@@ -94,7 +103,23 @@ impl CompiledShape {
         d
     }
 
-    /// Distance to one part on its own, before blending with the rest.
+    /// Bound on how fast the field changes, relative to a true distance:
+    /// 1 for solids, more where muscle relief tilts the surface.
+    pub fn lipschitz(&self) -> f32 {
+        self.prims
+            .iter()
+            .filter_map(|p| match p.shape {
+                Shape::Muscle { length, belly, radii, height, .. } => {
+                    let k = self.parts[p.part].group.and_then(|g| self.groups[g].relief).unwrap_or(0.0);
+                    Some(muscle_slope(length, belly, radii, height, k.max(self.parts[p.part].blend)))
+                }
+                _ => None,
+            })
+            .fold(1.0, |l, slope| l.max(1.0 + slope))
+    }
+
+    /// Distance to one part on its own, before blending with the rest
+    /// (for a muscle: minus how far it raises the surface).
     pub fn part_distance(&self, part: usize, p: Vec3) -> f32 {
         let part = &self.parts[part];
         self.part_distance_in(part.prims.clone(), part.smooth, p)
@@ -287,7 +312,7 @@ pub fn fillet(a: f32, b: f32, k: f32) -> f32 {
     smin(a, b, k)
 }
 
-fn closest_on_segment(p: Vec3, a: Vec3, b: Vec3) -> Vec3 {
+pub(crate) fn closest_on_segment(p: Vec3, a: Vec3, b: Vec3) -> Vec3 {
     let ab = b.sub(a);
     let t = (p.sub(a).dot(ab) / ab.length_squared().max(1e-12)).clamp(0.0, 1.0);
     a.add(ab.scale(t))

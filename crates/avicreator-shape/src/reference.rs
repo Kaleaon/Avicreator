@@ -623,9 +623,10 @@ impl Report {
     }
 }
 
+/// The solid part nearest `p`; muscle relief counts toward the part it lies on.
 fn owner(shape: &CompiledShape, p: Vec3) -> usize {
     (0..shape.parts.len())
-        .filter(|&i| shape.parts[i].op == crate::program::Op::Union)
+        .filter(|&i| shape.parts[i].op == crate::program::Op::Union && !shape.parts[i].relief)
         .min_by(|&a, &b| shape.part_distance(a, p).total_cmp(&shape.part_distance(b, p)))
         .unwrap_or(0)
 }

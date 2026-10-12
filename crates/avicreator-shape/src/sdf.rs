@@ -162,6 +162,63 @@ pub enum Shape {
     RoundCone { a: Vec3, b: Vec3, ra: f32, rb: f32 },
     Ellipsoid { center: Vec3, rot: Quat, radii: Vec3 },
     Slab { a: Vec3, b: Vec3, c: Vec3, half_thickness: f32 },
+    /// A muscle, as relief on the body it lies on: over its footprint (an
+    /// ellipse `radii[0]` wide, drawn out along local +Z from `origin` over
+    /// `length` and full-width from `belly[0]` to `belly[1]`) it raises the
+    /// surface by up to `height`, as a dome falling to zero at the edges.
+    /// `radii[1]` is the belly's half-thickness, which sets how far from its
+    /// centre (along local Y) a surface can lie and still be raised.
+    /// `distance` returns minus the raise (negative inside the footprint).
+    Muscle { origin: Vec3, rot: Quat, length: f32, belly: [f32; 2], radii: [f32; 2], height: f32 },
+}
+
+/// How far across its footprint (along local Y) a muscle's relief reaches:
+/// outward (+Y, the side it bulges to) in full past its half-thickness plus
+/// the soft tissue over it, inward only a little past its own depth, then
+/// fading out over the last distance either way. Returns (outward, inward,
+/// fade); the inward side stays short to leave the far side of a limb alone.
+pub fn muscle_reach(half_thickness: f32, height: f32) -> (f32, f32, f32) {
+    (half_thickness + 0.025, half_thickness + 0.005, (2.0 * height).max(0.015))
+}
+
+/// How far a muscle raises the surface at `local` (its frame): a parabolic
+/// dome over the footprint, negative outside it.
+pub fn muscle_relief(local: Vec3, length: f32, belly: [f32; 2], radii: [f32; 2], height: f32) -> f32 {
+    let z = if local.z < belly[0] {
+        (local.z - belly[0]) / belly[0]
+    } else if local.z > belly[1] {
+        (local.z - belly[1]) / (length - belly[1])
+    } else {
+        0.0
+    };
+    let x = local.x / radii[0];
+    let (out, inward, fade) = muscle_reach(radii[1], height);
+    let y = if local.y > 0.0 { local.y - out } else { -local.y - inward }.max(0.0) / fade;
+    height * (1.0 - (x * x + y * y + z * z))
+}
+
+/// Steepest slope of a muscle's relief where, smoothed by `k` against its
+/// neighbours and its edge, it still raises the surface.
+pub fn muscle_slope(length: f32, belly: [f32; 2], radii: [f32; 2], height: f32, k: f32) -> f32 {
+    let (_, _, fade) = muscle_reach(radii[1], height);
+    let narrowest = radii[0].min(belly[0]).min(length - belly[1]).min(fade);
+    2.0 * (height * height + height * k).sqrt() / narrowest
+}
+
+/// Box around everywhere a muscle's relief exceeds `-2k`, beyond which,
+/// smoothed by `k`, it can no longer change the surface.
+pub fn muscle_bounds(origin: Vec3, rot: Quat, length: f32, belly: [f32; 2], radii: [f32; 2], height: f32, k: f32) -> Aabb {
+    let e = (1.0 + 2.0 * k / height).sqrt();
+    let (out, inward, fade) = muscle_reach(radii[1], height);
+    let axis = rot.rotate_vec3(Vec3::Z);
+    // Centred between the inward and outward reach.
+    let shift = rot.rotate_vec3(Vec3::Y).scale((out - inward) * 0.5);
+    let half = |center: f32, z: f32| Shape::Ellipsoid {
+        center: origin.add(axis.scale(center)).add(shift),
+        rot,
+        radii: Vec3::new(radii[0] * e, (out + inward) * 0.5 + fade * e, z * e),
+    };
+    half(belly[0], belly[0]).bounds().union(half(belly[1], length - belly[1]).bounds())
 }
 
 impl Shape {
@@ -172,6 +229,9 @@ impl Shape {
                 ellipsoid(rot.conjugate().rotate_vec3(p.sub(*center)), *radii)
             }
             Shape::Slab { a, b, c, half_thickness } => triangle(p, *a, *b, *c) - half_thickness,
+            Shape::Muscle { origin, rot, length, belly, radii, height } => {
+                -muscle_relief(rot.conjugate().rotate_vec3(p.sub(*origin)), *length, *belly, *radii, *height)
+            }
         }
     }
 
@@ -193,6 +253,9 @@ impl Shape {
             Shape::Slab { a, b, c, half_thickness } => Aabb::from_point(*a, *half_thickness)
                 .union(Aabb::from_point(*b, *half_thickness))
                 .union(Aabb::from_point(*c, *half_thickness)),
+            Shape::Muscle { origin, rot, length, belly, radii, height } => {
+                muscle_bounds(*origin, *rot, *length, *belly, *radii, *height, 0.0)
+            }
         }
     }
 }
@@ -234,6 +297,40 @@ mod tests {
         assert!(smin(0.0, 0.0, 0.1) < 0.0);
         assert_eq!(smin(0.3, 0.5, 0.0), 0.3);
         assert!(smax(0.0, 0.0, 0.1) > 0.0);
+    }
+
+    #[test]
+    fn muscle_relief_is_a_dome_over_the_footprint() {
+        let rot = Quat::from_axis_angle(Vec3::X, -std::f32::consts::FRAC_PI_2); // local Z -> world Y
+        let m = Shape::Muscle { origin: Vec3::ZERO, rot, length: 0.3, belly: [0.1, 0.2], radii: [0.04, 0.02], height: 0.01 };
+        let at = |x: f32, y: f32, z: f32| rot.rotate_vec3(Vec3::new(x, y, z));
+        // Full height along the belly stretch, for surfaces near the belly.
+        for z in [0.1, 0.15, 0.2] {
+            assert!((m.distance(at(0.0, 0.02, z)) + 0.01).abs() < 1e-6);
+        }
+        // Falling to zero at the footprint's edges and ends, negative beyond.
+        assert!(m.distance(at(0.04, 0.0, 0.15)).abs() < 1e-6);
+        assert!(m.distance(Vec3::ZERO).abs() < 1e-6 && m.distance(at(0.0, 0.0, 0.3)).abs() < 1e-6);
+        assert!(m.distance(at(0.05, 0.0, 0.15)) > 0.0);
+        // Reaching out to surfaces over it, but not across the limb.
+        let (out, inward, fade) = muscle_reach(0.02, 0.01);
+        assert!((m.distance(at(0.0, out, 0.15)) + 0.01).abs() < 1e-6);
+        assert!(m.distance(at(0.0, -(inward + fade + 0.001), 0.15)) > 0.0);
+        assert!(m.distance(at(0.0, out + fade + 0.001, 0.15)) > 0.0);
+        let bb = m.bounds();
+        assert!(bb.min.y < 1e-4 && bb.max.y > 0.2999 && (bb.max.x - 0.04).abs() < 1e-5);
+        // Local +Y is world -Z here.
+        assert!((bb.min.z + out + fade).abs() < 1e-5 && (bb.max.z - inward - fade).abs() < 1e-5);
+        assert!(muscle_slope(0.3, [0.1, 0.2], [0.04, 0.02], 0.01, 0.0) <= 1.0 + 1e-6);
+        // Grown bounds reach exactly where the relief falls to -2k.
+        let k = 0.005;
+        let grown = muscle_bounds(Vec3::ZERO, rot, 0.3, [0.1, 0.2], [0.04, 0.02], 0.01, k);
+        let e = 2.0f32.sqrt();
+        for p in [at(0.04 * e, 0.0, 0.15), at(0.0, 0.0, 0.1 - 0.1 * e), at(0.0, -(inward + fade * e), 0.15), at(0.0, out + fade * e, 0.15)] {
+            assert!((m.distance(p) - 2.0 * k).abs() < 1e-5, "{}", m.distance(p));
+            assert!(grown.inflate(1e-5).intersects(&Aabb::from_point(p, 0.0)));
+        }
+        assert!(grown.max.x > 0.0565 && grown.min.y < -0.0414);
     }
 
     #[test]

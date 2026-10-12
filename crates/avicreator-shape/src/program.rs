@@ -282,6 +282,106 @@ pub struct ArrayPart {
     pub color: Option<[f32; 3]>,
 }
 
+/// One end of a muscle: a point on a bone (`attach`, `at`, `offset`, as for
+/// blobs) or a fixed point (`from`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Anchor {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<V3>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attach: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<Scalar>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset: Option<V3>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Belly {
+    At(Scalar),
+    Span([Scalar; 2]),
+}
+
+/// One belly of a muscle, from `origin` to `insertion`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MuscleHead {
+    pub origin: Anchor,
+    pub insertion: Anchor,
+    /// Belly half-width and half-thickness.
+    pub size: [Scalar; 2],
+    /// Direction the belly bulges (its thickness axis) in the rest pose,
+    /// carried by the origin's bone. Defaults to away from that bone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normal: Option<V3>,
+    /// Where the belly is thickest, as a fraction from origin to insertion:
+    /// a point (default 0.5) or a `[start, end]` stretch of full thickness.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub belly: Option<Belly>,
+}
+
+/// A muscle: a belly stretched from `origin` to `insertion`, shaped like an
+/// ellipsoid drawn out between the two ends. Each end follows its own bone,
+/// so the belly re-forms between them in any pose. A muscle with several
+/// heads (biceps, triceps, or the patches of a broad sheet like the pectoral)
+/// lists them in `heads` instead; they merge smoothly (`smooth`), while
+/// separate muscles keep the grooves their small `blend` leaves. Muscles join
+/// the blend group of their first origin's part, and shape the surface only:
+/// skin weights come from the parts underneath.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MusclePart {
+    pub name: String,
+    #[serde(default)]
+    pub mirror: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blend: Option<Scalar>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Anchor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub insertion: Option<Anchor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<[Scalar; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normal: Option<V3>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub belly: Option<Belly>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heads: Option<Vec<MuscleHead>>,
+    /// Blend radius between heads (default: 0.75 of their mean thinner radius).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub smooth: Option<Scalar>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[f32; 3]>,
+}
+
+impl MusclePart {
+    /// The heads, whether given as a list or as the part's own fields.
+    pub fn head_list(&self) -> Result<Vec<MuscleHead>, String> {
+        let single = (&self.origin, &self.insertion, &self.size);
+        match (&self.heads, single) {
+            (Some(heads), (None, None, None)) if self.normal.is_none() && self.belly.is_none() => {
+                if heads.is_empty() {
+                    Err("\"heads\" must list at least one head".into())
+                } else {
+                    Ok(heads.clone())
+                }
+            }
+            (Some(_), _) => Err("give either \"heads\" or one head's origin/insertion/size/normal/belly, not both".into()),
+            (None, (Some(origin), Some(insertion), Some(size))) => Ok(vec![MuscleHead {
+                origin: origin.clone(),
+                insertion: insertion.clone(),
+                size: size.clone(),
+                normal: self.normal.clone(),
+                belly: self.belly.clone(),
+            }]),
+            (None, _) => Err("needs \"origin\", \"insertion\" and \"size\" (or a \"heads\" list)".into()),
+        }
+    }
+}
+
 /// A list of parts sharing a scale (and optionally mirrored together):
 /// a whole head that grows with `$head_size`, or an ear assembly mirrored
 /// as one. Scale multiplies offsets, points, lengths, radii, sizes,
@@ -313,6 +413,7 @@ pub enum Part {
     Blob(BlobPart),
     Membrane(MembranePart),
     Array(ArrayPart),
+    Muscle(MusclePart),
     Scope(ScopePart),
 }
 
@@ -323,6 +424,7 @@ impl Part {
             Part::Blob(p) => &p.name,
             Part::Membrane(p) => &p.name,
             Part::Array(p) => &p.name,
+            Part::Muscle(p) => &p.name,
             Part::Scope(p) => &p.name,
         }
     }
@@ -333,6 +435,7 @@ impl Part {
             Part::Blob(p) => p.mirror,
             Part::Membrane(p) => p.mirror,
             Part::Array(p) => p.mirror,
+            Part::Muscle(p) => p.mirror,
             Part::Scope(p) => p.mirror,
         }
     }
@@ -343,6 +446,7 @@ impl Part {
             Part::Blob(_) => "blob",
             Part::Membrane(_) => "membrane",
             Part::Array(_) => "array",
+            Part::Muscle(_) => "muscle",
             Part::Scope(_) => "scope",
         }
     }
@@ -361,7 +465,7 @@ impl Part {
             Some(Value::String(k)) => k,
             _ => {
                 return Err(ShapeError::Program(format!(
-                    "{}: missing \"kind\" (one of chain, blob, membrane, array, scope)",
+                    "{}: missing \"kind\" (one of chain, blob, membrane, array, muscle, scope)",
                     label
                 )))
             }
@@ -373,6 +477,7 @@ impl Part {
             "blob" => Part::Blob(serde_json::from_value(rest).map_err(wrap)?),
             "membrane" => Part::Membrane(serde_json::from_value(rest).map_err(wrap)?),
             "array" => Part::Array(serde_json::from_value(rest).map_err(wrap)?),
+            "muscle" => Part::Muscle(serde_json::from_value(rest).map_err(wrap)?),
             "scope" => {
                 let raw: RawScope = serde_json::from_value(rest).map_err(wrap)?;
                 let parts = raw
@@ -385,7 +490,7 @@ impl Part {
             }
             other => {
                 return Err(ShapeError::Program(format!(
-                    "{}: unknown kind '{}' (expected chain, blob, membrane, array or scope)",
+                    "{}: unknown kind '{}' (expected chain, blob, membrane, array, muscle or scope)",
                     label, other
                 )))
             }
