@@ -147,6 +147,54 @@ impl Quat {
 
         v.add(u_cross_v.scale(2.0 * s)).add(u_cross_u_cross_v.scale(2.0))
     }
+
+    /// Rotation of `angle` radians around `axis` (normalized internally).
+    pub fn from_axis_angle(axis: Vec3, angle: f32) -> Quat {
+        let a = axis.normalize();
+        let (s, c) = (angle * 0.5).sin_cos();
+        Quat::new(a.x * s, a.y * s, a.z * s, c)
+    }
+
+    /// Rotation whose columns (images of +X, +Y, +Z) are the given orthonormal axes.
+    pub fn from_basis(x_axis: Vec3, y_axis: Vec3, z_axis: Vec3) -> Quat {
+        let (m00, m01, m02) = (x_axis.x, y_axis.x, z_axis.x);
+        let (m10, m11, m12) = (x_axis.y, y_axis.y, z_axis.y);
+        let (m20, m21, m22) = (x_axis.z, y_axis.z, z_axis.z);
+        let trace = m00 + m11 + m22;
+        let q = if trace > 0.0 {
+            let s = (trace + 1.0).sqrt() * 2.0;
+            Quat::new((m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25 * s)
+        } else if m00 > m11 && m00 > m22 {
+            let s = (1.0 + m00 - m11 - m22).sqrt() * 2.0;
+            Quat::new(0.25 * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s)
+        } else if m11 > m22 {
+            let s = (1.0 + m11 - m00 - m22).sqrt() * 2.0;
+            Quat::new((m01 + m10) / s, 0.25 * s, (m12 + m21) / s, (m02 - m20) / s)
+        } else {
+            let s = (1.0 + m22 - m00 - m11).sqrt() * 2.0;
+            Quat::new((m02 + m20) / s, (m12 + m21) / s, 0.25 * s, (m10 - m01) / s)
+        };
+        q.normalize()
+    }
+
+    /// Hamilton product: applying the result rotates by `rhs` first, then `self`.
+    pub fn mul(self, rhs: Quat) -> Quat {
+        Quat::new(
+            self.w * rhs.x + self.x * rhs.w + self.y * rhs.z - self.z * rhs.y,
+            self.w * rhs.y - self.x * rhs.z + self.y * rhs.w + self.z * rhs.x,
+            self.w * rhs.z + self.x * rhs.y - self.y * rhs.x + self.z * rhs.w,
+            self.w * rhs.w - self.x * rhs.x - self.y * rhs.y - self.z * rhs.z,
+        )
+    }
+
+    /// Inverse of a unit quaternion.
+    pub fn conjugate(self) -> Quat {
+        Quat::new(-self.x, -self.y, -self.z, self.w)
+    }
+
+    pub fn to_array(self) -> [f32; 4] {
+        [self.x, self.y, self.z, self.w]
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -231,6 +279,23 @@ mod tests {
         assert!((rotated.x - 0.0).abs() < 1e-5);
         assert!((rotated.y - 1.0).abs() < 1e-5);
         assert!((rotated.z - 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_quat_axis_angle_basis_and_mul() {
+        let q = Quat::from_axis_angle(Vec3::Z, std::f32::consts::FRAC_PI_2);
+        let r = q.rotate_vec3(Vec3::X);
+        assert!((r.y - 1.0).abs() < 1e-5);
+
+        // Basis built from the rotated axes must reproduce the same rotation.
+        let b = Quat::from_basis(q.rotate_vec3(Vec3::X), q.rotate_vec3(Vec3::Y), q.rotate_vec3(Vec3::Z));
+        assert!(b.dot(q).abs() > 1.0 - 1e-5);
+
+        // q * q^-1 is the identity, and composing two quarter turns is a half turn.
+        let id = q.mul(q.conjugate());
+        assert!((id.w.abs() - 1.0).abs() < 1e-5);
+        let half = q.mul(q).rotate_vec3(Vec3::X);
+        assert!((half.x + 1.0).abs() < 1e-5);
     }
 
     #[test]

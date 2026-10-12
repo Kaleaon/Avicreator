@@ -176,6 +176,24 @@ pub fn avicreator_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// Compiles a rig-aware shape program and returns JSON `{ "glsl", "meta" }`:
+/// the raymarching functions (`map`, `partColor`, `influence`, `boneMap`)
+/// and the parameters, parts, bones and bounds a viewer needs.
+#[wasm_bindgen]
+pub fn shape_compile(program_json: &str) -> Result<String, JsValue> {
+    let p = avicreator_shape::preview(program_json, &[]).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    Ok(serde_json::json!({ "glsl": p.glsl, "meta": p.meta }).to_string())
+}
+
+/// Meshes, skins and packs a shape program as binary glTF (`.glb`).
+/// `resolution` 0 uses the program's own setting.
+#[wasm_bindgen]
+pub fn shape_build_glb(program_json: &str, resolution: u32) -> Result<Vec<u8>, JsValue> {
+    let p = avicreator_shape::preview(program_json, &[]).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let resolution = (resolution > 0).then(|| resolution.clamp(8, 320));
+    Ok(avicreator_shape::build_glb(&p.shape, resolution, avicreator_shape::GlbOptions::default()).0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,5 +215,19 @@ mod tests {
         engine.set_morph_weight("smile", 0.5);
 
         assert_eq!(avicreator_version(), "0.1.0");
+    }
+
+    #[test]
+    fn test_shape_bindings_compile_and_export() {
+        let program = r#"{"parts":[
+            {"kind":"chain","name":"body","from":[0,0.5,0],"dir":[0,0,1],"length":1,"segments":2,"radius":0.2},
+            {"kind":"chain","name":"tail","attach":"body.0","at":0,"dir":[0,0,-1],"length":0.8,"segments":3,"radius":[0.15,0.02]}
+        ]}"#;
+        let compiled: serde_json::Value = serde_json::from_str(&shape_compile(program).unwrap()).unwrap();
+        assert!(compiled["glsl"].as_str().unwrap().contains("float map(vec3 p)"));
+        assert_eq!(compiled["meta"]["bones"].as_array().unwrap().len(), 5);
+
+        let glb = shape_build_glb(program, 24).unwrap();
+        assert_eq!(&glb[0..4], b"glTF");
     }
 }

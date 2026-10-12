@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shape Studio</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f3f1ed; --panel: #ffffff; --ink: #1d1f23; --muted: #6a6e77; --line: #e0dcd4;
+  --field: #f7f5f1; --accent: #c2410c; --accent-ink: #ffffff; --ok: #15803d; --err: #b42318;
+  --sel: #0e7490; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --panel: #1c1f25; --ink: #e7e5e0; --muted: #989ea8; --line: #2b2f37;
+    --field: #15171c; --accent: #fb923c; --accent-ink: #1b1207; --ok: #4ade80; --err: #f87171; --sel: #22d3ee;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+button, input, textarea { font: inherit; color: inherit; }
+.app { display: grid; height: 100vh; min-height: 0;
+  grid-template-columns: 290px minmax(0, 1fr) 420px; grid-template-rows: 50px minmax(0, 1fr);
+  grid-template-areas: "top top top" "side view code"; }
+.app.static { grid-template-columns: 290px minmax(0, 1fr); grid-template-areas: "top top" "side view"; }
+.app.static .studio-only { display: none !important; }
+header { grid-area: top; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
+.brand { font-weight: 650; letter-spacing: .01em; white-space: nowrap; }
+.brand small { color: var(--muted); font-weight: 500; margin-left: 6px; }
+.status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.status.ok::before { background: var(--ok); }
+.status.err { color: var(--err); border-color: color-mix(in srgb, var(--err) 40%, var(--line)); }
+.status.err::before { background: var(--err); }
+.spacer { flex: 1; }
+.btn { border: 1px solid var(--line); background: var(--field); border-radius: 7px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+.res { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.res input { width: 62px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); }
+
+aside { grid-area: side; background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; min-height: 0; }
+section { padding: 14px 14px 16px; border-bottom: 1px solid var(--line); }
+section h2 { margin: 0 0 10px; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.hint { color: var(--muted); font-size: 12px; margin: 0; }
+.param { margin-bottom: 10px; }
+.param .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.param label { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.param output { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.param input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--field); padding: 6px 0; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.checks { display: flex; gap: 16px; margin-top: 10px; }
+.checks label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.checks input { accent-color: var(--accent); }
+.list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; }
+.list li { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; font-family: var(--mono); font-size: 12px; }
+.list li .sub { color: var(--muted); margin-left: auto; font-size: 11px; }
+.bones li { cursor: pointer; }
+.bones li:hover { background: var(--field); }
+.bones li.sel { background: color-mix(in srgb, var(--sel) 18%, transparent); color: var(--sel); }
+.swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; border: 1px solid rgba(0,0,0,.15); }
+dl.stats { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin: 0; }
+dl.stats dt { color: var(--muted); }
+dl.stats dd { margin: 0; font-family: var(--mono); font-size: 12px; text-align: right; }
+
+.viewport { grid-area: view; position: relative; min-width: 0; min-height: 0; background: #17191d; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+canvas:active { cursor: grabbing; }
+.overlay { position: absolute; left: 12px; bottom: 10px; color: #b9bdc5; font-size: 12px; pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.legend { position: absolute; right: 12px; bottom: 10px; display: none; align-items: center; gap: 8px; color: #d4d7dc; font-size: 12px; }
+.legend .ramp { width: 120px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, #1a2a6b, #0d8c8c, #f2d933, #e6381f); }
+.notice { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); display: none; gap: 10px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 6px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.25); }
+
+.code { grid-area: code; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border-left: 1px solid var(--line); }
+.code .bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.code .bar h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.code .path { color: var(--muted); font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; flex: 1; text-align: left; }
+textarea { flex: 1; min-height: 0; resize: none; border: 0; outline: none; padding: 12px 14px; background: var(--field);
+  font-family: var(--mono); font-size: 12px; line-height: 1.5; tab-size: 2; white-space: pre; overflow: auto; }
+.error { display: none; margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--err);
+  font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 30%; overflow: auto; }
+
+@media (max-width: 900px) {
+  .app, .app.static { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 58vh auto auto;
+    grid-template-areas: "top" "view" "side" "code"; }
+  header { flex-wrap: wrap; padding: 8px 16px; }
+  aside, .code { border: 0; border-top: 1px solid var(--line); }
+  section { padding-left: 16px; padding-right: 16px; }
+  .code { height: 70vh; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="brand">Shape Studio<small id="name"></small></div>
+    <div class="status" id="status">Loading…</div>
+    <div class="spacer"></div>
+    <label class="res studio-only" title="Grid cells along the longest axis">Resolution <input id="res" type="number" min="8" max="320" step="8"></label>
+    <button class="btn studio-only" id="export">Export .glb</button>
+    <button class="btn primary studio-only" id="save" disabled>Save</button>
+  </header>
+
+  <aside>
+    <section>
+      <h2>Parameters</h2>
+      <div id="params"></div>
+      <p class="hint" id="params-hint"></p>
+    </section>
+    <section>
+      <h2>View</h2>
+      <div class="seg" role="group" aria-label="Shading">
+        <button data-mode="0" aria-pressed="true">Clay</button>
+        <button data-mode="1" aria-pressed="false">Parts</button>
+        <button data-mode="2" aria-pressed="false">Influence</button>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="bones-toggle" checked> Bones</label>
+        <label><input type="checkbox" id="ground-toggle" checked> Ground</label>
+      </div>
+    </section>
+    <section>
+      <h2>Bones</h2>
+      <ul class="list bones" id="bones"></ul>
+      <p class="hint" style="margin-top:8px">Click a bone to paint its influence. <kbd>[</kbd> <kbd>]</kbd> step through.</p>
+    </section>
+    <section>
+      <h2>Parts</h2>
+      <ul class="list" id="parts"></ul>
+    </section>
+    <section>
+      <h2>Size</h2>
+      <dl class="stats" id="stats"></dl>
+    </section>
+  </aside>
+
+  <div class="viewport">
+    <canvas id="view"></canvas>
+    <div class="notice" id="notice"><span id="notice-text"></span><button class="btn" id="notice-btn">Reload</button></div>
+    <div class="overlay">Drag to orbit · Shift-drag to pan · Wheel to zoom · Double-click to reset</div>
+    <div class="legend" id="legend"><span>0</span><div class="ramp"></div><span>1</span><span id="legend-bone"></span></div>
+  </div>
+
+  <div class="code studio-only">
+    <div class="bar"><h2>Program</h2><span class="path" id="path"></span><button class="btn" id="format">Format</button></div>
+    <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+    <pre class="error" id="error"></pre>
+  </div>
+</div>
+
+<script>
+"use strict";
+const EMBED = /*__EMBED__*/null;
+const STUDIO = EMBED === null;
+const $ = (s) => document.querySelector(s);
+
+// ---------------------------------------------------------------- WebGL
+const canvas = $("#view");
+const gl = canvas.getContext("webgl2", { antialias: false, preserveDrawingBuffer: true });
+
+const VERT = `#version 300 es
+in vec2 pos;
+void main() { gl_Position = vec4(pos, 0.0, 1.0); }`;
+
+const FRAG_HEAD = `#version 300 es
+precision highp float;
+precision highp int;
+uniform vec2 uRes;
+uniform vec3 uEye, uTarget, uBMin, uBMax;
+uniform float uScale, uGroundY;
+uniform int uMode, uBones, uSel, uGround;
+out vec4 outColor;
+`;
+
+const FRAG_MAIN = `
+vec2 boxHit(vec3 ro, vec3 rd) {
+  vec3 inv = 1.0 / rd;
+  vec3 t0 = (uBMin - ro) * inv, t1 = (uBMax - ro) * inv;
+  vec3 a = min(t0, t1), b = max(t0, t1);
+  return vec2(max(max(a.x, a.y), a.z), min(min(b.x, b.y), b.z));
+}
+vec3 calcNormal(vec3 p) {
+  float e = 0.0005 * uScale; vec2 k = vec2(1.0, -1.0);
+  return normalize(k.xyy * map(p + k.xyy * e) + k.yyx * map(p + k.yyx * e) +
+                   k.yxy * map(p + k.yxy * e) + k.xxx * map(p + k.xxx * e));
+}
+float calcAO(vec3 p, vec3 n) {
+  float occ = 0.0, sca = 1.0;
+  for (int i = 0; i < 5; i++) {
+    float h = uScale * (0.004 + 0.018 * float(i));
+    occ += (h - map(p + h * n)) * sca; sca *= 0.8;
+  }
+  return clamp(1.0 - 10.0 * occ / uScale, 0.0, 1.0);
+}
+float softShadow(vec3 ro, vec3 rd) {
+  float tmax = boxHit(ro, rd).y;
+  float res = 1.0, t = 0.01 * uScale;
+  for (int i = 0; i < 40; i++) {
+    float h = map(ro + rd * t);
+    res = min(res, 8.0 * h / t);
+    t += clamp(h, 0.006 * uScale, 0.12 * uScale);
+    if (res < 0.02 || t > tmax) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
+vec3 heat(float w) {
+  w = clamp(w, 0.0, 1.0);
+  vec3 c = mix(vec3(0.10, 0.16, 0.42), vec3(0.05, 0.55, 0.55), smoothstep(0.0, 0.33, w));
+  c = mix(c, vec3(0.95, 0.85, 0.20), smoothstep(0.33, 0.66, w));
+  return lin(mix(c, vec3(0.90, 0.22, 0.12), smoothstep(0.66, 1.0, w)));
+}
+void main() {
+  vec2 uv = (2.0 * gl_FragCoord.xy - uRes) / uRes.y;
+  vec3 ro = uEye;
+  vec3 fw = normalize(uTarget - uEye);
+  vec3 rt = normalize(cross(fw, vec3(0.0, 1.0, 0.0)));
+  vec3 up = cross(rt, fw);
+  vec3 rd = normalize(uv.x * rt + uv.y * up + 1.8 * fw);
+
+  vec3 bg = lin(mix(vec3(0.19, 0.20, 0.23), vec3(0.10, 0.11, 0.13), clamp(uv.y * 0.5 + 0.5, 0.0, 1.0)));
+  vec3 col = bg;
+  vec2 bh = boxHit(ro, rd);
+  bool inBox = bh.x < bh.y && bh.y > 0.0;
+  float tHit = 1e9;
+  if (inBox) {
+    float t = max(bh.x, 0.0);
+    for (int i = 0; i < 256; i++) {
+      float d = map(ro + rd * t);
+      if (d < 0.00025 * uScale * (1.0 + t)) { tHit = t; break; }
+      t += d * 0.9;
+      if (t > bh.y) break;
+    }
+  }
+  if (tHit < 1e8) {
+    vec3 p = ro + rd * tHit;
+    vec3 n = calcNormal(p);
+    vec3 base = lin(vec3(0.74, 0.68, 0.62));
+    if (uMode == 1) base = lin(partColor(p));
+    else if (uMode == 2) base = heat(influence(p, uSel));
+    vec3 L = normalize(vec3(0.55, 0.85, 0.35));
+    float dif = clamp(dot(n, L), 0.0, 1.0);
+    if (dif > 0.0) dif *= softShadow(p + n * 0.002 * uScale, L);
+    float ao = calcAO(p, n);
+    float hemi = 0.5 + 0.5 * n.y;
+    float fre = pow(clamp(1.0 + dot(n, rd), 0.0, 1.0), 3.0);
+    vec3 light = 1.2 * dif * vec3(1.0, 0.95, 0.88) + 0.45 * hemi * ao * vec3(0.55, 0.62, 0.75) + 0.06 * ao;
+    col = base * light + fre * ao * vec3(0.04);
+    if (uMode == 2) col = mix(col, base, 0.35);
+  } else if (uGround == 1 && rd.y < 0.0) {
+    float tg = (uGroundY - ro.y) / rd.y;
+    vec3 p = ro + rd * tg;
+    float occ = clamp(map(p) / (0.12 * uScale), 0.0, 1.0);
+    float cell = pow(10.0, floor(log(uScale * 0.5) / log(10.0)));
+    vec2 g = abs(fract(p.xz / cell + 0.5) - 0.5) / fwidth(p.xz / cell);
+    float line = 1.0 - clamp(min(g.x, g.y), 0.0, 1.0);
+    vec3 ground = lin(vec3(0.25, 0.26, 0.29) * (0.35 + 0.65 * occ) + line * 0.05);
+    float fade = exp(-pow(length(p.xz - uTarget.xz) / (1.6 * uScale), 2.0));
+    col = mix(bg, ground, fade);
+  }
+  if (uBones == 1 && inBox) {
+    float t = max(bh.x, 0.0);
+    for (int i = 0; i < 160; i++) {
+      vec2 b = boneMap(ro + rd * t);
+      if (b.x < 0.0004 * uScale) {
+        vec3 bc = lin(int(b.y + 0.5) == uSel ? vec3(0.20, 0.85, 0.95) : vec3(1.0, 0.60, 0.18));
+        col = mix(col, bc, t > tHit ? 0.55 : 0.95);
+        break;
+      }
+      t += b.x;
+      if (t > bh.y) break;
+    }
+  }
+  outColor = vec4(pow(col, vec3(0.4545)), 1.0);
+}
+`;
+
+function shader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(s);
+    gl.deleteShader(s);
+    throw new Error(log || "shader compile failed");
+  }
+  return s;
+}
+
+function buildProgram(glsl) {
+  const vs = shader(gl.VERTEX_SHADER, VERT);
+  const fs = shader(gl.FRAGMENT_SHADER, FRAG_HEAD + glsl + FRAG_MAIN);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.bindAttribLocation(prog, 0, "pos");
+  gl.linkProgram(prog);
+  gl.deleteShader(vs);
+  gl.deleteShader(fs);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || "link failed");
+  const loc = {};
+  for (const u of ["uRes", "uEye", "uTarget", "uBMin", "uBMax", "uScale", "uGroundY", "uMode", "uBones", "uSel", "uGround"]) {
+    loc[u] = gl.getUniformLocation(prog, u);
+  }
+  return { prog, loc };
+}
+
+if (gl) {
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+}
+
+// ---------------------------------------------------------------- state
+const state = {
+  meta: null, gl: null, mode: 0, bones: true, ground: true, sel: 0,
+  cam: { yaw: 0.85, pitch: 0.28, dist: 4, target: [0, 1, 0] }, framed: false,
+  mtime: 0, saved: "", path: "",
+};
+
+function scaleOf(meta) {
+  const b = meta.bounds;
+  return Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
+}
+
+function frameCamera() {
+  const b = state.meta.bounds;
+  state.cam.target = [0, 1, 2].map((i) => (b.min[i] + b.max[i]) / 2);
+  state.cam.dist = scaleOf(state.meta) * 1.15;
+  state.cam.yaw = 0.85;
+  state.cam.pitch = 0.28;
+}
+
+function eye() {
+  const { yaw, pitch, dist, target } = state.cam;
+  const cp = Math.cos(pitch);
+  return [target[0] + dist * cp * Math.sin(yaw), target[1] + dist * Math.sin(pitch), target[2] + dist * cp * Math.cos(yaw)];
+}
+
+let dirty = false, interacting = false, idleTimer = 0;
+function requestRender(fast) {
+  dirty = true;
+  if (fast) {
+    interacting = true;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { interacting = false; dirty = true; }, 160);
+  }
+}
+
+function draw() {
+  const p = state.gl, m = state.meta;
+  if (!p || !m) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2) * (interacting ? 0.5 : 1);
+  const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, w, h);
+  gl.useProgram(p.prog);
+  const L = p.loc;
+  gl.uniform2f(L.uRes, w, h);
+  gl.uniform3fv(L.uEye, eye());
+  gl.uniform3fv(L.uTarget, state.cam.target);
+  gl.uniform3fv(L.uBMin, m.bounds.min);
+  gl.uniform3fv(L.uBMax, m.bounds.max);
+  gl.uniform1f(L.uScale, scaleOf(m));
+  gl.uniform1f(L.uGroundY, m.ground);
+  gl.uniform1i(L.uMode, state.mode);
+  gl.uniform1i(L.uBones, state.bones ? 1 : 0);
+  gl.uniform1i(L.uSel, state.sel);
+  gl.uniform1i(L.uGround, state.ground ? 1 : 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+(function loop() {
+  if (dirty) { dirty = false; draw(); }
+  requestAnimationFrame(loop);
+})();
+new ResizeObserver(() => requestRender(false)).observe(canvas);
+
+// ---------------------------------------------------------------- camera input
+const pointers = new Map();
+let pinch = 0;
+canvas.addEventListener("pointerdown", (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+});
+canvas.addEventListener("pointermove", (e) => {
+  const prev = pointers.get(e.pointerId);
+  if (!prev) return;
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const cam = state.cam;
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinch) cam.dist *= pinch / d;
+    pinch = d;
+  } else if (e.shiftKey || e.buttons === 2 || e.buttons === 4) {
+    const s = cam.dist * 0.0016;
+    const [sy, cy] = [Math.sin(cam.yaw), Math.cos(cam.yaw)];
+    cam.target[0] -= (cy * dx) * s;
+    cam.target[2] -= (-sy * dx) * s;
+    cam.target[1] += dy * s;
+  } else {
+    cam.yaw -= dx * 0.008;
+    cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch + dy * 0.008));
+  }
+  requestRender(true);
+});
+const release = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = 0; };
+canvas.addEventListener("pointerup", release);
+canvas.addEventListener("pointercancel", release);
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  state.cam.dist *= Math.exp(e.deltaY * 0.0012);
+  requestRender(true);
+}, { passive: false });
+canvas.addEventListener("dblclick", () => { if (state.meta) { frameCamera(); requestRender(false); } });
+
+// ---------------------------------------------------------------- panels
+function setStatus(text, kind) {
+  const el = $("#status");
+  el.textContent = text;
+  el.className = "status" + (kind ? " " + kind : "");
+  el.title = text;
+}
+
+function showError(msg) {
+  const el = $("#error");
+  el.textContent = msg || "";
+  el.style.display = msg ? "block" : "none";
+  if (msg) setStatus(msg.split("\n")[0], "err");
+}
+
+function kib(n) { return (n / 1024).toFixed(1) + " KiB"; }
+function rgb(c) { return `rgb(${c.map((v) => Math.round(v * 255)).join(",")})`; }
+function round(v) { return Math.round(v * 1e4) / 1e4; }
+
+let sliding = null;
+function renderParams() {
+  const host = $("#params");
+  const params = state.meta.params;
+  const names = params.map((p) => p.name).join("|");
+  if (host.dataset.names !== names) {
+    host.dataset.names = names;
+    host.innerHTML = "";
+    for (const p of params) {
+      const div = document.createElement("div");
+      div.className = "param";
+      div.innerHTML = `<div class="row"><label></label><output></output></div><input type="range">`;
+      div.querySelector("label").textContent = p.name;
+      const input = div.querySelector("input");
+      input.dataset.name = p.name;
+      input.disabled = !STUDIO;
+      input.addEventListener("input", () => {
+        sliding = p.name;
+        div.querySelector("output").textContent = round(+input.value);
+        setParam(p.name, round(+input.value));
+      });
+      input.addEventListener("change", () => { sliding = null; });
+      host.appendChild(div);
+    }
+  }
+  params.forEach((p, i) => {
+    const div = host.children[i];
+    const input = div.querySelector("input");
+    input.min = p.min; input.max = p.max; input.step = (p.max - p.min) / 400 || 0.001;
+    if (sliding !== p.name) input.value = p.value;
+    div.querySelector("output").textContent = round(p.value);
+  });
+  $("#params-hint").textContent = params.length
+    ? (STUDIO ? "" : "Run avishape studio to edit.")
+    : "No params yet. Add \"params\" and reference them as \"$name\".";
+}
+
+function renderBones() {
+  const host = $("#bones");
+  host.innerHTML = "";
+  state.meta.bones.forEach((b, i) => {
+    const li = document.createElement("li");
+    li.textContent = b.name;
+    const sub = document.createElement("span");
+    sub.className = "sub";
+    sub.textContent = b.parent === null ? "root" : "← " + state.meta.bones[b.parent].name;
+    li.appendChild(sub);
+    li.title = `bend ${b.limits.bend.join("…")}°, side ${b.limits.side.join("…")}°, twist ${b.limits.twist.join("…")}°`;
+    li.className = i === state.sel ? "sel" : "";
+    li.addEventListener("click", () => selectBone(i, true));
+    host.appendChild(li);
+  });
+}
+
+function selectBone(i, paint) {
+  const n = state.meta.bones.length;
+  if (!n) return;
+  state.sel = (i + n) % n;
+  [...$("#bones").children].forEach((li, k) => { li.className = k === state.sel ? "sel" : ""; });
+  $("#bones").children[state.sel].scrollIntoView({ block: "nearest" });
+  if (paint) setMode(2);
+  $("#legend-bone").textContent = state.meta.bones[state.sel].name;
+  requestRender(false);
+}
+
+function renderParts() {
+  const host = $("#parts");
+  host.innerHTML = "";
+  for (const p of state.meta.parts) {
+    const li = document.createElement("li");
+    const sw = document.createElement("span");
+    sw.className = "swatch";
+    sw.style.background = p.op === "subtract" ? "transparent" : rgb(p.color);
+    li.appendChild(sw);
+    li.appendChild(document.createTextNode(p.name));
+    const sub = document.createElement("span");
+    sub.className = "sub";
+    sub.textContent = p.op === "subtract" ? p.kind + " −" : p.kind;
+    li.appendChild(sub);
+    host.appendChild(li);
+  }
+}
+
+let lastExport = null;
+function renderStats() {
+  const s = state.meta.stats;
+  const rows = [
+    ["Program", kib(s.program_bytes)],
+    ["Generated GLSL", kib(s.glsl_bytes)],
+    ["Parts / primitives", `${s.parts} / ${s.primitives}`],
+    ["Bones", s.bones],
+  ];
+  if (lastExport) {
+    rows.push(["Last .glb", kib(lastExport.bytes)], ["Vertices", lastExport.vertices.toLocaleString()],
+      ["Meshing", `${lastExport.millis} ms`]);
+  }
+  $("#stats").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.mode === mode)));
+  $("#legend").style.display = mode === 2 ? "flex" : "none";
+  requestRender(false);
+}
+document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => setMode(+b.dataset.mode)));
+$("#bones-toggle").addEventListener("change", (e) => { state.bones = e.target.checked; requestRender(false); });
+$("#ground-toggle").addEventListener("change", (e) => { state.ground = e.target.checked; requestRender(false); });
+document.addEventListener("keydown", (e) => {
+  if (e.target === $("#editor") || !state.meta) return;
+  if (e.key === "]") selectBone(state.sel + 1, true);
+  if (e.key === "[") selectBone(state.sel - 1, true);
+});
+
+function apply(glsl, meta) {
+  if (!gl) { showError("WebGL2 is not available in this browser."); return false; }
+  let built;
+  try { built = buildProgram(glsl); }
+  catch (e) { showError("Shader: " + e.message); return false; }
+  if (state.gl) gl.deleteProgram(state.gl.prog);
+  state.gl = built;
+  state.meta = meta;
+  if (state.sel >= meta.bones.length) state.sel = 0;
+  if (!state.framed) { frameCamera(); state.framed = true; }
+  $("#name").textContent = meta.name;
+  $("#res").placeholder = meta.resolution;
+  renderParams(); renderBones(); renderParts(); renderStats();
+  if (meta.bones.length) $("#legend-bone").textContent = meta.bones[state.sel].name;
+  showError("");
+  setStatus(`${kib(meta.stats.program_bytes)} program → ${kib(meta.stats.glsl_bytes)} GLSL`, "ok");
+  requestRender(false);
+  return true;
+}
+
+// ---------------------------------------------------------------- studio
+const editor = $("#editor");
+
+/** JSON with short arrays and small objects kept on one line. */
+function formatProgram(v, ind = "") {
+  const flat = (x) => x === null || typeof x !== "object";
+  if (Array.isArray(v)) {
+    if (v.every(flat)) return "[" + v.map((x) => JSON.stringify(x)).join(", ") + "]";
+    return "[\n" + v.map((x) => ind + "  " + formatProgram(x, ind + "  ")).join(",\n") + "\n" + ind + "]";
+  }
+  if (v && typeof v === "object") {
+    const keys = Object.keys(v);
+    if (!keys.length) return "{}";
+    const inner = keys.map((k) => JSON.stringify(k) + ": " + formatProgram(v[k], ind + "  "));
+    const one = "{" + inner.join(", ") + "}";
+    const simple = keys.every((k) => flat(v[k]) || (Array.isArray(v[k]) && v[k].every((x) => flat(x) || (Array.isArray(x) && x.every(flat)))));
+    if (simple && one.length + ind.length <= 110) return one;
+    return "{\n" + inner.map((s) => ind + "  " + s).join(",\n") + "\n" + ind + "}";
+  }
+  return JSON.stringify(v);
+}
+
+function markDirty() { $("#save").disabled = editor.value === state.saved; }
+
+let compileSeq = 0, compileTimer = 0;
+function scheduleCompile(delay) {
+  clearTimeout(compileTimer);
+  compileTimer = setTimeout(compileNow, delay);
+}
+async function compileNow() {
+  const seq = ++compileSeq;
+  try {
+    const res = await fetch("/api/compile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: editor.value }) });
+    const data = await res.json();
+    if (seq !== compileSeq) return;
+    if (!data.ok) { showError(data.error); return; }
+    apply(data.glsl, data.meta);
+  } catch (e) {
+    if (seq === compileSeq) showError("Studio server unreachable: " + e.message);
+  }
+}
+
+function setParam(name, value) {
+  let obj;
+  try { obj = JSON.parse(editor.value); }
+  catch { showError("Fix the program JSON before using sliders."); return; }
+  obj.params = obj.params || {};
+  const p = obj.params[name];
+  if (p && typeof p === "object") p.value = value; else obj.params[name] = value;
+  editor.value = formatProgram(obj);
+  markDirty();
+  scheduleCompile(30);
+}
+
+async function loadSource(force) {
+  const res = await fetch("/api/source");
+  const data = await res.json();
+  if (!force && data.mtime === state.mtime) return;
+  state.mtime = data.mtime;
+  state.path = data.path;
+  $("#path").textContent = "\u200e" + data.path + "\u200e";
+  $("#path").title = data.path;
+  if (data.text === editor.value) return;
+  if (force || editor.value === state.saved) {
+    editor.value = data.text;
+    state.saved = data.text;
+    $("#notice").style.display = "none";
+    markDirty();
+    scheduleCompile(0);
+  } else {
+    $("#notice-text").textContent = "The file changed on disk.";
+    $("#notice").style.display = "flex";
+  }
+}
+
+if (STUDIO) {
+  editor.addEventListener("input", () => { markDirty(); scheduleCompile(250); });
+  editor.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const { selectionStart: a, selectionEnd: b } = editor;
+      editor.setRangeText("  ", a, b, "end");
+      markDirty();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); $("#save").click(); }
+  });
+  $("#format").addEventListener("click", () => {
+    try { editor.value = formatProgram(JSON.parse(editor.value)); markDirty(); }
+    catch (e) { showError("JSON: " + e.message); }
+  });
+  $("#notice-btn").addEventListener("click", () => loadSource(true));
+  $("#save").addEventListener("click", async () => {
+    const text = editor.value;
+    const res = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    const data = await res.json();
+    if (!data.ok) { showError(data.error); return; }
+    state.saved = text;
+    state.mtime = data.mtime;
+    markDirty();
+    setStatus("Saved " + state.path.split(/[\\/]/).pop(), "ok");
+  });
+  $("#export").addEventListener("click", async () => {
+    const btn = $("#export");
+    btn.disabled = true;
+    btn.textContent = "Meshing…";
+    try {
+      const resolution = +$("#res").value || undefined;
+      const res = await fetch("/api/glb", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: editor.value, resolution }) });
+      if (!res.ok) { showError((await res.json()).error); return; }
+      lastExport = JSON.parse(res.headers.get("X-Avishape-Stats") || "null");
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (state.meta ? state.meta.name : "shape") + ".glb";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      renderStats();
+      setStatus(`Exported ${lastExport.vertices.toLocaleString()} vertices in ${lastExport.millis} ms`, "ok");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Export .glb";
+    }
+  });
+  loadSource(true).catch((e) => showError("Studio server unreachable: " + e.message));
+  setInterval(() => loadSource(false).catch(() => {}), 1500);
+} else {
+  $("#app").classList.add("static");
+  document.title = EMBED.meta.name + " · Shape preview";
+  apply(EMBED.glsl, EMBED.meta);
+}
+</script>
+</body>
+</html>

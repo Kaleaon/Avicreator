@@ -43,6 +43,7 @@ members = [
     "crates/avicreator-core",
     "crates/avicreator-wasm",
     "crates/avicreator-ffi",
+    "crates/avicreator-shape",
 ]
 resolver = "2"
 
@@ -69,3 +70,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# Meshing and simplification are hot loops; optimise them for speed even
+# though the rest of the release profile targets size.
+[profile.release.package.avicreator-shape]
+opt-level = 3

@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 avicreator-core = { path = "../avicreator-core" }
 avicreator-schema = { path = "../avicreator-schema" }
+avicreator-shape = { path = "../avicreator-shape" }
 wasm-bindgen = { workspace = true }
 web-sys = { workspace = true }
 js-sys = { workspace = true }
