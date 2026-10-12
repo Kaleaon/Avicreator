@@ -68,11 +68,13 @@ pub struct MeshOptions {
     pub projection_steps: u32,
     /// Simplify to at most this many triangles.
     pub triangles: Option<usize>,
+    /// Sample normals and bone weights (skip for geometry-only uses).
+    pub skin: bool,
 }
 
 impl MeshOptions {
     pub fn new(resolution: u32) -> Self {
-        Self { resolution, accelerate: true, projection_steps: 2, triangles: None }
+        Self { resolution, accelerate: true, projection_steps: 2, triangles: None, skin: true }
     }
 }
 
@@ -394,6 +396,17 @@ pub fn mesh(shape: &CompiledShape, opts: MeshOptions) -> MeshResult {
         _ => (positions, indices),
     };
     positions.shrink_to_fit();
+
+    if !opts.skin {
+        stats.vertices = positions.len();
+        stats.triangles = indices.len() / 3;
+        stats.millis = clock.millis();
+        let count = positions.len();
+        return MeshResult {
+            mesh: Mesh::new(positions, indices),
+            stats: MeshStats { vertices: count, ..stats },
+        };
+    }
 
     let normals: Vec<Vec3> = positions
         .iter()

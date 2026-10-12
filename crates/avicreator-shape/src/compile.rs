@@ -7,7 +7,7 @@ use avicreator_core::{Quat, Vec3};
 
 use crate::program::{
     ArrayPart, ArrayShape, BlobPart, BoneSpec, ChainPart, Limits, MembranePart, Op, Part, Pivot, Profile, Radii,
-    Resolver, Scalar, ScopePart, Settings, ShapeProgram, SkeletonTarget, V3,
+    Resolver, Rotation, Scalar, ScopePart, Settings, ShapeProgram, SkeletonTarget, V3,
 };
 use crate::sdf::{Aabb, Shape};
 use crate::ShapeError;
@@ -41,6 +41,9 @@ pub struct Bone {
     pub rest: Quat,
     pub limits: BoneLimits,
     pub part: usize,
+    /// World rotation from the authored rest pose to the compiled pose
+    /// (identity unless a pose is active).
+    pub pose: Quat,
 }
 
 /// How a part's bones share influence over the region the part owns.
@@ -212,6 +215,8 @@ struct ChainInfo {
     joints: Vec<Vec3>,
     radii: Vec<f32>,
     bones: Vec<usize>,
+    /// Pose rotation per segment (follows the parent for shape-only chains).
+    poses: Vec<Quat>,
 }
 
 struct Compiler<'a> {
@@ -225,6 +230,8 @@ struct Compiler<'a> {
     chains: HashMap<usize, ChainInfo>,
     /// Per part: the parts it connects to, and whether it roots a group.
     links: Vec<(Vec<usize>, bool)>,
+    /// Local rotations of the active pose, by bone name.
+    pose: HashMap<String, Quat>,
 }
 
 pub fn compile(program: &ShapeProgram) -> Result<CompiledShape, ShapeError> {
@@ -251,7 +258,18 @@ pub fn compile(program: &ShapeProgram) -> Result<CompiledShape, ShapeError> {
         part_lookup: HashMap::new(),
         chains: HashMap::new(),
         links: Vec::new(),
+        pose: HashMap::new(),
     };
+    if let Some(name) = &program.pose {
+        let spec = program.poses.get(name).ok_or_else(|| {
+            ShapeError::Program(format!(
+                "unknown pose '{}' (defined: {})",
+                name,
+                program.poses.keys().cloned().collect::<Vec<_>>().join(", ")
+            ))
+        })?;
+        c.pose = resolve_pose(spec, &c.res).map_err(ShapeError::Program)?;
+    }
 
     let mut counter = 0;
     c.parts_in(&program.parts, Mirror::NONE, "", &mut counter)?;
@@ -296,6 +314,30 @@ pub fn compile(program: &ShapeProgram) -> Result<CompiledShape, ShapeError> {
     Ok(shape)
 }
 
+/// Local rotations per bone; left-side entries mirror to the right (side
+/// and twist reverse under reflection) unless the right side is given.
+fn resolve_pose(spec: &BTreeMap<String, Rotation>, res: &Resolver) -> Result<HashMap<String, Quat>, String> {
+    let deg = |s: &Option<Scalar>| -> Result<f32, String> {
+        s.as_ref().map_or(Ok(0.0), |s| res.scalar(s).map_err(|e| e.to_string()))
+    };
+    let mut out = HashMap::new();
+    let local = |b: f32, s: f32, t: f32| {
+        Quat::from_axis_angle(Vec3::X, b.to_radians())
+            .mul(Quat::from_axis_angle(Vec3::Z, s.to_radians()))
+            .mul(Quat::from_axis_angle(Vec3::Y, t.to_radians()))
+    };
+    for (bone, r) in spec {
+        let (b, s, t) = (deg(&r.bend)?, deg(&r.side)?, deg(&r.twist)?);
+        out.insert(bone.clone(), local(b, s, t));
+        if let Some(right) = swap_side(bone) {
+            if !spec.contains_key(&right) {
+                out.insert(right, local(b, -s, -t));
+            }
+        }
+    }
+    Ok(out)
+}
+
 fn palette(index: usize) -> [f32; 3] {
     // Evenly spread hues (golden ratio) at a muted, clay-like saturation.
     let h = (index as f32 * 0.618_034 + 0.08).fract() * 6.0;
@@ -322,12 +364,16 @@ fn positive(v: f32, what: &str) -> Result<f32, String> {
     }
 }
 
-/// Rest frame for a bone along `dir`, rolled so local X follows `bend_ref`.
-fn bone_frame(dir: Vec3, bend_ref: Vec3) -> Quat {
+/// Rest frame for a bone along `dir`, rolled so local X follows `bend_ref`
+/// (falling back to `fallback` axes, mirrored with the part, when parallel).
+fn bone_frame(dir: Vec3, bend_ref: Vec3, fallback: [Vec3; 2]) -> Quat {
     let y = dir.normalize();
-    for r in [bend_ref, Vec3::X, Vec3::Z] {
+    for r in [bend_ref, fallback[0], fallback[1]] {
+        let r = r.normalize();
         let x = r.sub(y.scale(r.dot(y)));
-        if x.length_squared() > 1e-6 {
+        // Require ~8 degrees between the reference and the bone; a nearly
+        // parallel reference would leave the roll to rounding noise.
+        if x.length_squared() > 0.02 {
             let x = x.normalize();
             return Quat::from_basis(x, y, x.cross(y));
         }
@@ -489,7 +535,7 @@ impl<'a> Compiler<'a> {
                 let t = self.opt_scalar(at, 1.0)?;
                 let bone = &self.bones[b];
                 let p = bone.head.lerp(bone.tail, t);
-                Ok((p.add(offset), p, Some(b)))
+                Ok((p.add(bone.pose.rotate_vec3(offset)), p, Some(b)))
             }
             (None, None) => Ok((offset, offset, None)),
         }
@@ -505,6 +551,7 @@ impl<'a> Compiler<'a> {
         Ok(index)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_bone(
         &mut self,
         name: String,
@@ -514,6 +561,8 @@ impl<'a> Compiler<'a> {
         bend_ref: Vec3,
         limits: BoneLimits,
         part: usize,
+        pose: Quat,
+        m: Mirror,
     ) -> Result<usize, String> {
         if self.bone_lookup.contains_key(&name) {
             return Err(format!("duplicate bone name '{}'", name));
@@ -525,9 +574,10 @@ impl<'a> Compiler<'a> {
             parent,
             head,
             tail,
-            rest: bone_frame(tail.sub(head), bend_ref),
+            rest: bone_frame(tail.sub(head), bend_ref, [pose.rotate_vec3(m.axial(Vec3::X)), pose.rotate_vec3(m.axial(Vec3::Z))]),
             limits,
             part,
+            pose,
         });
         Ok(index)
     }
@@ -580,10 +630,13 @@ impl<'a> Compiler<'a> {
     fn chain(&mut self, p: &ChainPart, m: Mirror, default_color: [f32; 3]) -> Result<(), String> {
         let (start, _, parent) = self.anchor(&p.from, &p.attach, &p.at, &p.offset, m)?;
         let attached: Vec<usize> = parent.map(|b| self.bones[b].part).into_iter().collect();
-        let bend_axis = m.axial(match &p.bend_axis {
+        // Authored directions are in the rest pose; carry them through the
+        // parent's pose rotation.
+        let parent_pose = parent.map_or(Quat::IDENTITY, |b| self.bones[b].pose);
+        let bend_axis = parent_pose.rotate_vec3(m.axial(match &p.bend_axis {
             Some(v) => self.res.vec3(v).map_err(|e| e.to_string())?,
             None => Vec3::X,
-        });
+        }));
         if bend_axis.length_squared() < 1e-8 {
             return Err("bend_axis must be non-zero".into());
         }
@@ -598,11 +651,11 @@ impl<'a> Compiler<'a> {
                     return Err("\"segments\" and \"curl\" only apply with \"dir\"/\"length\"".into());
                 }
                 for pt in points {
-                    joints.push(start.add(self.vec(pt, m)?));
+                    joints.push(start.add(parent_pose.rotate_vec3(self.vec(pt, m)?)));
                 }
             }
             (None, Some(dir), Some(length)) => {
-                let dir = self.vec(dir, m)?;
+                let dir = parent_pose.rotate_vec3(self.vec(dir, m)?);
                 if dir.length_squared() < 1e-8 {
                     return Err("dir must be non-zero".into());
                 }
@@ -660,15 +713,38 @@ impl<'a> Compiler<'a> {
                 return Err(format!("\"bones\" lists {} names but the chain has {} segments", names.len(), n));
             }
         }
+        let mut seg_poses = vec![parent_pose; n];
         if p.op == Op::Union && !p.rigid {
-            let mut prev = parent;
+            let names = (0..n)
+                .map(|i| match p.bones.as_ref().and_then(|names| names[i].as_deref()) {
+                    Some(explicit) => m.bone_name(explicit),
+                    None if n > 1 => Ok(format!("{}.{}{}", p.name, i, m.suffix)),
+                    None => Ok(format!("{}{}", p.name, m.suffix)),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            // Apply the active pose segment by segment: a posed bone turns
+            // everything after its head (and its descendants, via `pose`).
+            let mut acc = parent_pose;
+            let mut axis = bend_axis;
+            let mut axes = Vec::with_capacity(n);
             for i in 0..n {
-                let name = match p.bones.as_ref().and_then(|names| names[i].as_deref()) {
-                    Some(explicit) => m.bone_name(explicit)?,
-                    None if n > 1 => format!("{}.{}{}", p.name, i, m.suffix),
-                    None => format!("{}{}", p.name, m.suffix),
-                };
-                let b = self.add_bone(name, prev, joints[i], joints[i + 1], bend_axis, limits, index)?;
+                if let Some(local) = self.pose.get(&names[i]) {
+                    let fallback = [acc.rotate_vec3(m.axial(Vec3::X)), acc.rotate_vec3(m.axial(Vec3::Z))];
+                    let frame = bone_frame(joints[i + 1].sub(joints[i]), axis, fallback);
+                    let world = frame.mul(*local).mul(frame.conjugate());
+                    let pivot = joints[i];
+                    for j in joints.iter_mut().skip(i + 1) {
+                        *j = pivot.add(world.rotate_vec3(j.sub(pivot)));
+                    }
+                    axis = world.rotate_vec3(axis);
+                    acc = world.mul(acc);
+                }
+                seg_poses[i] = acc;
+                axes.push(axis);
+            }
+            let mut prev = parent;
+            for (i, name) in names.into_iter().enumerate() {
+                let b = self.add_bone(name, prev, joints[i], joints[i + 1], axes[i], limits, index, seg_poses[i], m)?;
                 bones.push(b);
                 prev = Some(b);
             }
@@ -687,7 +763,7 @@ impl<'a> Compiler<'a> {
         let blend = self.blend(&p.blend, self.settings.blend, m)?;
         let own = p.op == Op::Union && !p.rigid && (p.separate.unwrap_or(true) || attached.is_empty());
         self.finish_part(index, &p.name, m, "chain", p.op, blend, mean_r * 0.15, prim_start, influence, p.color.unwrap_or(default_color), (attached, own))?;
-        self.chains.insert(index, ChainInfo { joints, radii, bones });
+        self.chains.insert(index, ChainInfo { joints, radii, bones, poses: seg_poses });
         Ok(())
     }
 
@@ -711,7 +787,10 @@ impl<'a> Compiler<'a> {
         if axis.length_squared() < 1e-8 {
             return Err("axis must be non-zero".into());
         }
-        let rot = forward_frame(axis);
+        // The frame is built in the rest pose, then carried rigidly by the parent's pose.
+        let parent_pose = parent.map_or(Quat::IDENTITY, |b| self.bones[b].pose);
+        let mut rot = parent_pose.mul(forward_frame(axis));
+        let mut center = center;
 
         let index = self.begin_part(p.name.clone(), m)?;
         let bone_name = match &p.bone {
@@ -726,19 +805,29 @@ impl<'a> Compiler<'a> {
             }
             Influence::None
         } else if let Some(bone_name) = bone_name {
-            let bend_ref = m.axial(match &p.bend_axis {
+            let mut bend_ref = parent_pose.rotate_vec3(m.axial(match &p.bend_axis {
                 Some(v) => self.res.vec3(v).map_err(|e| e.to_string())?,
                 None => Vec3::X,
-            });
+            }));
             let pivot = p.pivot.unwrap_or(if parent.is_some() { Pivot::Attach } else { Pivot::Center });
             let head = if pivot == Pivot::Attach && parent.is_some() { anchor_point } else { center };
-            let forward = rot.rotate_vec3(Vec3::Z);
-            let mut tail = center.add(forward.scale(radii.z));
-            if tail.sub(head).length() < 1e-4 {
-                tail = head.add(rot.rotate_vec3(Vec3::Y).scale(radii.y));
+            let tail_of = |center: Vec3, rot: Quat| {
+                let tail = center.add(rot.rotate_vec3(Vec3::Z).scale(radii.z));
+                if tail.sub(head).length() < 1e-4 { head.add(rot.rotate_vec3(Vec3::Y).scale(radii.y)) } else { tail }
+            };
+            let mut pose = parent_pose;
+            if let Some(local) = self.pose.get(&bone_name) {
+                let fallback = [parent_pose.rotate_vec3(m.axial(Vec3::X)), parent_pose.rotate_vec3(m.axial(Vec3::Z))];
+                let frame = bone_frame(tail_of(center, rot).sub(head), bend_ref, fallback);
+                let world = frame.mul(*local).mul(frame.conjugate());
+                center = head.add(world.rotate_vec3(center.sub(head)));
+                rot = world.mul(rot);
+                bend_ref = world.rotate_vec3(bend_ref);
+                pose = world.mul(parent_pose);
             }
+            let tail = tail_of(center, rot);
             let limits = self.limits(&p.limits, m)?;
-            let b = self.add_bone(bone_name, parent, head, tail, bend_ref, limits, index)?;
+            let b = self.add_bone(bone_name, parent, head, tail, bend_ref, limits, index, pose, m)?;
             Influence::Rigid { bone: b }
         } else {
             match parent {
@@ -827,7 +916,7 @@ impl<'a> Compiler<'a> {
         };
 
         let (along, chain) = self.find_chain(&p.along, m)?;
-        let (joints, radii, chain_bones) = (chain.joints.clone(), chain.radii.clone(), chain.bones.clone());
+        let (joints, radii, chain_bones, chain_poses) = (chain.joints.clone(), chain.radii.clone(), chain.bones.clone(), chain.poses.clone());
         let lengths: Vec<f32> = joints.windows(2).map(|w| w[1].sub(w[0]).length()).collect();
         let total: f32 = lengths.iter().sum();
 
@@ -847,6 +936,7 @@ impl<'a> Compiler<'a> {
             let pos = joints[seg].lerp(joints[seg + 1], u);
             let tangent = joints[seg + 1].sub(joints[seg]).normalize();
             let r = radii[seg] + (radii[seg + 1] - radii[seg]) * u;
+            let side = chain_poses.get(seg).copied().unwrap_or(Quat::IDENTITY).rotate_vec3(side);
             let mut up = side.sub(tangent.scale(side.dot(tangent)));
             if up.length_squared() < 1e-8 {
                 return Err("side points along the chain; choose a direction across it".into());
@@ -1034,6 +1124,38 @@ mod tests {
             r#"{"parts":[{"kind":"scope","name":"k","mirror":true,"parts":[{"kind":"blob","name":"b","mirror":true,"from":[0,0,0],"radii":1}]}]}"#,
         ).unwrap()).unwrap_err().to_string();
         assert!(err.contains("already mirrored"), "{}", err);
+    }
+
+    #[test]
+    fn poses_turn_bones_and_everything_attached_mirrored() {
+        let json = r#"{
+          "poses": {"arms_down": {"arm.L": {"bend": -90}}},
+          "parts": [
+            {"kind":"chain","name":"body","from":[0,1,0],"dir":[0,1,0],"length":0.5,"radius":0.1},
+            {"kind":"chain","name":"arm","mirror":true,"attach":"body","offset":[0.1,0,0],"dir":[1,0,0],"length":0.5,"radius":0.04},
+            {"kind":"blob","name":"hand","mirror":true,"attach":"arm","offset":[0.05,0,0],"radii":0.03,"bone":false}
+          ]}"#;
+        let rest = build(json);
+        let mut prog = ShapeProgram::from_json(json).unwrap();
+        prog.pose = Some("arms_down".into());
+        let posed = compile(&prog).unwrap();
+        for side in ["L", "R"] {
+            let i = posed.bone_index(&format!("arm.{}", side)).unwrap();
+            let (r, p) = (&rest.bones[i], &posed.bones[i]);
+            assert!(r.tail.sub(p.head).length() > 0.4);
+            assert!((p.tail.y - (p.head.y - 0.5)).abs() < 1e-4, "{} arm hangs straight down: {:?}", side, p.tail);
+            // The attached hand's offset turned with the arm.
+            let hand = &posed.prims[posed.parts[posed.part_index(&format!("hand.{}", side)).unwrap()].prims.start];
+            if let Shape::Ellipsoid { center, .. } = hand.shape {
+                assert!((center.y - (p.tail.y - 0.05)).abs() < 1e-4, "{:?}", center);
+            }
+        }
+        let err = {
+            let mut prog = ShapeProgram::from_json(json).unwrap();
+            prog.pose = Some("nope".into());
+            compile(&prog).unwrap_err().to_string()
+        };
+        assert!(err.contains("unknown pose 'nope'"), "{}", err);
     }
 
     #[test]

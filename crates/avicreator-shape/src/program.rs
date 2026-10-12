@@ -430,12 +430,37 @@ pub enum SkeletonTarget {
     SecondLife,
 }
 
+/// A rotation in a bone's local frame, in degrees: `bend` about X, `side`
+/// about Z, `twist` about Y (along the bone), applied in that order.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Rotation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bend: Option<Scalar>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub side: Option<Scalar>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub twist: Option<Scalar>,
+}
+
+/// Named poses: bone name -> rotation. Left-side entries mirror to the right
+/// unless the right side is given explicitly.
+pub type Poses = BTreeMap<String, BTreeMap<String, Rotation>>;
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ShapeProgram {
     pub name: String,
+    /// Free text: provenance, licence of reference data, authoring notes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
     pub skeleton: SkeletonTarget,
     pub params: BTreeMap<String, Param>,
     pub settings: Settings,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub poses: Poses,
+    /// Pose to compile in (`None` = the authored rest pose).
+    #[serde(skip)]
+    pub pose: Option<String>,
     pub parts: Vec<Part>,
 }
 
@@ -445,11 +470,15 @@ struct RawProgram {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
+    notes: Option<String>,
+    #[serde(default)]
     skeleton: SkeletonTarget,
     #[serde(default)]
     params: BTreeMap<String, Param>,
     #[serde(default)]
     settings: Settings,
+    #[serde(default)]
+    poses: Poses,
     parts: Vec<Value>,
 }
 
@@ -465,9 +494,12 @@ impl ShapeProgram {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             name: raw.name.unwrap_or_else(|| "shape".to_string()),
+            notes: raw.notes,
             skeleton: raw.skeleton,
             params: raw.params,
             settings: raw.settings,
+            poses: raw.poses,
+            pose: None,
             parts,
         })
     }
@@ -494,6 +526,42 @@ impl ShapeProgram {
     pub fn param_values(&self) -> BTreeMap<String, f32> {
         self.params.iter().map(|(k, v)| (k.clone(), v.value())).collect()
     }
+}
+
+/// Rewrites parameter values inside program text, keeping its formatting:
+/// `"name": 1.2` and `"name": {"value": 1.2, ...}` inside `"params"`.
+pub fn set_param_values(text: &str, values: &[(String, f32)]) -> Result<String, ShapeError> {
+    let params_at = text.find("\"params\"").ok_or_else(|| ShapeError::Program("program has no \"params\"".into()))?;
+    let mut out = text.to_string();
+    for (name, value) in values {
+        let key = format!("\"{}\"", name);
+        let rel = out[params_at..].find(&key).ok_or_else(|| ShapeError::Program(format!("param '{}' not found", name)))?;
+        let mut i = params_at + rel + key.len();
+        let bytes = out.as_bytes();
+        while i < bytes.len() && (bytes[i] == b':' || bytes[i].is_ascii_whitespace()) {
+            i += 1;
+        }
+        if bytes.get(i) == Some(&b'{') {
+            let rel = out[i..].find("\"value\"").ok_or_else(|| ShapeError::Program(format!("param '{}' has no value", name)))?;
+            i += rel + "\"value\"".len();
+            let bytes = out.as_bytes();
+            while i < bytes.len() && (bytes[i] == b':' || bytes[i].is_ascii_whitespace()) {
+                i += 1;
+            }
+        }
+        let bytes = out.as_bytes();
+        let mut end = i;
+        while end < bytes.len() && (bytes[end].is_ascii_digit() || matches!(bytes[end], b'.' | b'-' | b'+' | b'e' | b'E')) {
+            end += 1;
+        }
+        if end == i {
+            return Err(ShapeError::Program(format!("param '{}' is not a plain number", name)));
+        }
+        let rounded = (value * 1e4).round() / 1e4;
+        out.replace_range(i..end, &rounded.to_string());
+    }
+    ShapeProgram::from_json(&out)?;
+    Ok(out)
 }
 
 /// Evaluates `$param` expressions: numbers, `$names`, `+ - * /`, unary minus
@@ -690,6 +758,13 @@ mod tests {
         let text = r#"{"parts":[{"kind":"scope","name":"head","scale":2,"parts":[{"kind":"blob","name":"b","radii":1,"oops":1}]}]}"#;
         let err = ShapeProgram::from_json(text).unwrap_err().to_string();
         assert!(err.contains("part 0.0 ('b') (blob)") && err.contains("oops"), "{}", err);
+    }
+
+    #[test]
+    fn param_values_are_rewritten_in_place() {
+        let text = "{\n  \"params\": {\"a\": 1.5, \"b\": {\"value\": 2, \"min\": 1, \"max\": 3}},\n  \"parts\": []\n}";
+        let out = set_param_values(text, &[("a".into(), 1.25), ("b".into(), 2.5)]).unwrap();
+        assert_eq!(out, "{\n  \"params\": {\"a\": 1.25, \"b\": {\"value\": 2.5, \"min\": 1, \"max\": 3}},\n  \"parts\": []\n}");
     }
 
     #[test]

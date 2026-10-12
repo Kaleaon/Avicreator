@@ -23,6 +23,7 @@ pub mod gltf;
 pub mod glsl;
 pub mod mesher;
 pub mod program;
+pub mod reference;
 pub mod sdf;
 pub mod simplify;
 pub mod sl;
@@ -49,7 +50,13 @@ pub struct Preview {
 
 /// Parses, applies parameter overrides, compiles and emits the preview shader.
 pub fn preview(text: &str, overrides: &[(String, f32)]) -> Result<Preview, ShapeError> {
+    preview_in_pose(text, overrides, None)
+}
+
+/// [`preview`] compiled in one of the program's named poses.
+pub fn preview_in_pose(text: &str, overrides: &[(String, f32)], pose: Option<&str>) -> Result<Preview, ShapeError> {
     let mut program = ShapeProgram::from_json(text)?;
+    program.pose = pose.map(str::to_string);
     for (name, value) in overrides {
         program.set_param(name, *value)?;
     }

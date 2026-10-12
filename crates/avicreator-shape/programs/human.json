@@ -12,6 +12,9 @@
     "bust": {"value": 0.0, "min": 0.0, "max": 1.0}
   },
   "settings": {"blend": 0.035, "resolution": 900, "triangles": 60000},
+  "poses": {
+    "anatomical": {"mCollarLeft": {"bend": -12}, "mShoulderLeft": {"bend": -66}, "mElbowLeft": {"twist": 60}}
+  },
   "parts": [
     {
       "kind": "chain", "name": "spine", "from": [0, "$hip_height", 0],
