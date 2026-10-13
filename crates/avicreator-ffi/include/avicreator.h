@@ -99,6 +99,25 @@ uintptr_t avicreator_engine_get_index_count(struct EngineHandle *engine);
 int32_t avicreator_normalize_weights(float *weights, uintptr_t len, float epsilon);
 
 /**
+ * Parses skeleton JSON string and returns canonical JSON representation string.
+ * The returned string pointer must be deallocated using `avicreator_free_string`.
+ * Returns null pointer if parsing fails or input is invalid.
+ */
+char *avicreator_parse_skeleton_json(const char *json_str);
+
+/**
+ * Parses asset manifest JSON string and returns canonical JSON representation string.
+ * The returned string pointer must be deallocated using `avicreator_free_string`.
+ * Returns null pointer if parsing fails or input is invalid.
+ */
+char *avicreator_parse_manifest_json(const char *json_str);
+
+/**
+ * Validates skeleton JSON. Returns 1 if valid, 0 if invalid.
+ */
+int32_t avicreator_validate_skeleton_json(const char *json_str);
+
+/**
  * Validates manifest JSON. Returns 1 if valid, 0 if invalid.
  */
 int32_t avicreator_validate_manifest_json(const char *json_str);

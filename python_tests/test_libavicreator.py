@@ -115,3 +115,79 @@ def test_fitter_and_rigger():
 
     assert isinstance(skinned, np.ndarray)
     assert skinned.shape == (1, 3)
+
+def test_asset_manifest_and_skeleton_schema():
+    """Verify AssetManifest and Skeleton PyO3 bindings and JSON roundtrip."""
+    manifest = libavicreator.AssetManifest(
+        id="hero_v1",
+        name="Hero Character",
+        version="1.0.0",
+        category="character",
+        skeleton_type="biped"
+    )
+    manifest.author = "Kaleaon Studio"
+    manifest.mesh_files = ["body.obj", "head.obj"]
+    manifest.morph_targets = ["smile", "blink"]
+    manifest.tags = ["hero", "avatar"]
+
+    assert manifest.id == "hero_v1"
+    assert manifest.name == "Hero Character"
+    assert manifest.category == "character"
+    assert manifest.author == "Kaleaon Studio"
+    assert manifest.mesh_files == ["body.obj", "head.obj"]
+
+    json_str = manifest.to_json()
+    assert '"id": "hero_v1"' in json_str or '"id":"hero_v1"' in json_str
+
+    parsed_manifest = libavicreator.AssetManifest.from_json(json_str)
+    assert parsed_manifest.id == manifest.id
+    assert parsed_manifest.name == manifest.name
+    assert parsed_manifest.category == manifest.category
+    assert parsed_manifest.skeleton_type == manifest.skeleton_type
+
+    skel = libavicreator.Skeleton("StandardBiped")
+    skel.add_node(0, "Hips", translation=[0.0, 0.0, 0.0])
+    skel.add_node(1, "Chest", parent_id=0, translation=[0.0, 0.5, 0.0])
+    skel.add_node(2, "Head", parent_id=1, translation=[0.0, 0.4, 0.0])
+
+    assert skel.name == "StandardBiped"
+    assert skel.node_count == 3
+    assert skel.root_indices == [0]
+
+    skel_json = skel.to_json()
+    assert '"StandardBiped"' in skel_json
+
+    parsed_skel = libavicreator.Skeleton.from_json(skel_json)
+    assert parsed_skel.name == skel.name
+    assert parsed_skel.node_count == skel.node_count
+    assert parsed_skel.root_indices == skel.root_indices
+
+def test_json_base_mesh_loading(tmp_path):
+    """Verify loading base mesh from JSON format alongside XML fallback."""
+    from lib.xml_base_mesh import load_base_mesh, load_dir
+
+    json_content = """{
+        "name": "JsonHero",
+        "version": "1.0",
+        "metadata": {"author": "Kaleaon"},
+        "vertices": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        "faces": [[0, 1, 2]],
+        "nodes": [
+            {"id": 0, "name": "Hips", "translation": [0.0, 0.0, 0.0]},
+            {"id": 1, "name": "Spine", "parent_id": 0, "translation": [0.0, 0.2, 0.0]}
+        ]
+    }"""
+
+    json_file = tmp_path / "JsonHero.json"
+    json_file.write_text(json_content)
+
+    mesh = load_base_mesh(str(json_file))
+    assert mesh.name == "JsonHero"
+    assert mesh.version == "1.0"
+    assert len(mesh.vertices) == 3
+    assert len(mesh.faces) == 1
+    assert "Hips" in mesh.bones
+    assert "Spine" in mesh.bones
+
+    loaded_dir = load_dir(str(tmp_path))
+    assert "JsonHero" in loaded_dir

@@ -307,8 +307,104 @@ def _parse_limb_chains(node: Optional[ET.Element]) -> Dict[str, List[str]]:
     return result
 
 
+import json
+
+
+def load_base_mesh_from_json(path_or_str: str) -> BaseMesh:
+    """Load a BaseMesh definition from a JSON file path or JSON string."""
+    if os.path.exists(path_or_str):
+        with open(path_or_str, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = json.loads(path_or_str)
+
+    name = data.get("name") or data.get("id") or "Unnamed"
+    version = str(data.get("version", "1.0"))
+    metadata = data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    vertices = [tuple(float(x) for x in v) for v in data.get("vertices", [])]
+    faces = [tuple(int(x) for x in f) for f in data.get("faces", [])]
+
+    bones: Dict[str, Bone] = {}
+    raw_bones = data.get("bones") or data.get("nodes") or []
+    if isinstance(raw_bones, list):
+        for b in raw_bones:
+            if isinstance(b, dict):
+                b_name = b.get("name", "")
+                parent = b.get("parent") or b.get("parent_id")
+                if parent is not None:
+                    parent = str(parent)
+                head = tuple(float(x) for x in (b.get("head") or b.get("translation") or [0.0, 0.0, 0.0]))
+                tail = tuple(float(x) for x in (b.get("tail") or [0.0, 0.1, 0.0]))
+                roll = float(b.get("roll", 0.0))
+                bones[b_name] = Bone(name=b_name, parent=parent, head=head, tail=tail, roll=roll)
+    elif isinstance(raw_bones, dict):
+        for b_name, b in raw_bones.items():
+            parent = b.get("parent")
+            head = tuple(float(x) for x in b.get("head", [0.0, 0.0, 0.0]))
+            tail = tuple(float(x) for x in b.get("tail", [0.0, 0.1, 0.0]))
+            roll = float(b.get("roll", 0.0))
+            bones[b_name] = Bone(name=b_name, parent=parent, head=head, tail=tail, roll=roll)
+
+    weight_layers: Dict[str, WeightLayer] = {}
+    raw_layers = data.get("weight_layers", {})
+    if isinstance(raw_layers, dict):
+        for l_name, l_data in raw_layers.items():
+            layer_type = l_data.get("layer_type", "generic")
+            normalised = bool(l_data.get("normalised", True))
+            weights = {b_name: {int(k): float(v) for k, v in w_map.items()} for b_name, w_map in l_data.get("weights", {}).items()}
+            weight_layers[l_name] = WeightLayer(name=l_name, layer_type=layer_type, normalised=normalised, weights=weights)
+
+    sizing: Dict[str, SizingParameter] = {}
+    raw_sizing = data.get("sizing", {})
+    if isinstance(raw_sizing, dict):
+        for s_name, s_data in raw_sizing.items():
+            if isinstance(s_data, dict):
+                sizing[s_name] = SizingParameter(
+                    name=s_name,
+                    value=float(s_data.get("value", 0.0)),
+                    unit=str(s_data.get("unit", "")),
+                    minimum=float(s_data["min"]) if "min" in s_data and s_data["min"] is not None else None,
+                    maximum=float(s_data["max"]) if "max" in s_data and s_data["max"] is not None else None,
+                )
+
+    unit = str(data.get("unit", "meters"))
+    is_super_mesh = bool(data.get("is_super_mesh", False))
+    preallocated_geometry = data.get("preallocated_geometry", {})
+    limb_chains = data.get("limb_chains", {})
+
+    return BaseMesh(
+        name=name,
+        version=version,
+        metadata=metadata,
+        vertices=vertices,
+        faces=faces,
+        bones=bones,
+        weight_layers=weight_layers,
+        sizing=sizing,
+        unit=unit,
+        is_super_mesh=is_super_mesh,
+        preallocated_geometry=preallocated_geometry,
+        limb_chains=limb_chains,
+    )
+
+
 def load_base_mesh(path: str) -> BaseMesh:
-    """Load a single XML base mesh definition."""
+    """Load a single XML or JSON base mesh definition."""
+    if path.lower().endswith(".json"):
+        return load_base_mesh_from_json(path)
+
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content_sample = f.read(10).strip()
+            if content_sample.startswith("{"):
+                return load_base_mesh_from_json(path)
+        except Exception:
+            pass
+
     tree = ET.parse(path)
     root = tree.getroot()
     if root.tag not in ("BaseMesh", "SuperMesh"):
@@ -376,12 +472,13 @@ def load_base_mesh(path: str) -> BaseMesh:
 
 
 def load_dir(path: str) -> Dict[str, BaseMesh]:
-    """Load all XML base meshes from the given directory."""
+    """Load all base meshes (JSON or XML) from the given directory."""
     result: Dict[str, BaseMesh] = {}
     if not os.path.isdir(path):
         return result
     for entry in sorted(os.listdir(path)):
-        if not entry.lower().endswith(".xml"):
+        lower = entry.lower()
+        if not (lower.endswith(".xml") or lower.endswith(".json")):
             continue
         full_path = os.path.join(path, entry)
         if not os.path.isfile(full_path):
