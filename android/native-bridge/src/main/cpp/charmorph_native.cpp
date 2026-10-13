@@ -126,6 +126,9 @@ Java_com_charmorph_nativebridge_NativeLib_updateMorphs(
     }
 }
 
+#include <algorithm>
+#include <cmath>
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_charmorph_nativebridge_NativeLib_stringFromJNI(
         JNIEnv* env,
@@ -143,10 +146,133 @@ Java_com_charmorph_nativebridge_NativeLib_solveMorphWeights(
         jintArray morphIndices,
         jfloatArray morphDeltas) {
 
-    // Stub implementation as before
-    int morphCount = 10;
-    std::vector<float> resultWeights(morphCount, 0.5f);
-    jfloatArray result = env->NewFloatArray(morphCount);
-    env->SetFloatArrayRegion(result, 0, morphCount, resultWeights.data());
+    jsize landmarksLen = env->GetArrayLength(landmarks);
+    jsize baseLen = env->GetArrayLength(baseVertices);
+    jsize indicesLen = env->GetArrayLength(morphIndices);
+    jsize deltasLen = env->GetArrayLength(morphDeltas);
+
+    if (landmarksLen == 0 || indicesLen < 2) {
+        jfloatArray emptyResult = env->NewFloatArray(0);
+        return emptyResult;
+    }
+
+    jfloat* lmData = env->GetFloatArrayElements(landmarks, 0);
+    jfloat* baseData = env->GetFloatArrayElements(baseVertices, 0);
+    jint* idxData = env->GetIntArrayElements(morphIndices, 0);
+    jfloat* deltaData = env->GetFloatArrayElements(morphDeltas, 0);
+
+    int numLandmarkCoords = idxData[0]; // e.g. 2 * N
+    int numMorphs = idxData[1];          // M morph targets
+
+    if (numMorphs <= 0 || numLandmarkCoords <= 0) {
+        env->ReleaseFloatArrayElements(landmarks, lmData, 0);
+        env->ReleaseFloatArrayElements(baseVertices, baseData, 0);
+        env->ReleaseIntArrayElements(morphIndices, idxData, 0);
+        env->ReleaseFloatArrayElements(morphDeltas, deltaData, 0);
+
+        jfloatArray result = env->NewFloatArray(std::max(0, numMorphs));
+        return result;
+    }
+
+    int K = std::min(static_cast<int>(landmarksLen), std::min(static_cast<int>(baseLen), numLandmarkCoords));
+    int M = numMorphs;
+
+    // Target displacement vector b (size K)
+    std::vector<float> b(K);
+    for (int k = 0; k < K; ++k) {
+        b[k] = lmData[k] - baseData[k];
+    }
+
+    // Morph delta matrix A (K rows, M cols)
+    std::vector<float> A(K * M, 0.0f);
+    if (deltasLen >= M * K) {
+        for (int m = 0; m < M; ++m) {
+            for (int k = 0; k < K; ++k) {
+                A[k * M + m] = deltaData[m * K + k];
+            }
+        }
+    }
+
+    // Normal equations: (A^T * A + lambda * I) * x = A^T * b
+    std::vector<float> ATA(M * M, 0.0f);
+    std::vector<float> ATb(M, 0.0f);
+
+    for (int i = 0; i < M; ++i) {
+        for (int j = 0; j < M; ++j) {
+            float sum = 0.0f;
+            for (int k = 0; k < K; ++k) {
+                sum += A[k * M + i] * A[k * M + j];
+            }
+            ATA[i * M + j] = sum;
+        }
+        // Ridge regularization
+        ATA[i * M + i] += 1e-4f;
+
+        float sumB = 0.0f;
+        for (int k = 0; k < K; ++k) {
+            sumB += A[k * M + i] * b[k];
+        }
+        ATb[i] = sumB;
+    }
+
+    // Solve ATA * x = ATb using Gaussian elimination with partial pivoting
+    std::vector<float> x(M, 0.0f);
+    std::vector<float> mat = ATA;
+    std::vector<float> rhs = ATb;
+
+    for (int k = 0; k < M; ++k) {
+        int pivot = k;
+        float maxVal = std::abs(mat[k * M + k]);
+        for (int i = k + 1; i < M; ++i) {
+            float val = std::abs(mat[i * M + k]);
+            if (val > maxVal) {
+                maxVal = val;
+                pivot = i;
+            }
+        }
+
+        if (pivot != k) {
+            for (int j = k; j < M; ++j) {
+                std::swap(mat[k * M + j], mat[pivot * M + j]);
+            }
+            std::swap(rhs[k], rhs[pivot]);
+        }
+
+        float pivotVal = mat[k * M + k];
+        if (std::abs(pivotVal) < 1e-7f) {
+            pivotVal = 1e-7f;
+            mat[k * M + k] = pivotVal;
+        }
+
+        for (int i = k + 1; i < M; ++i) {
+            float factor = mat[i * M + k] / pivotVal;
+            rhs[i] -= factor * rhs[k];
+            for (int j = k; j < M; ++j) {
+                mat[i * M + j] -= factor * mat[k * M + j];
+            }
+        }
+    }
+
+    // Back substitution
+    for (int i = M - 1; i >= 0; --i) {
+        float sum = rhs[i];
+        for (int j = i + 1; j < M; ++j) {
+            sum -= mat[i * M + j] * x[j];
+        }
+        float diag = mat[i * M + i];
+        if (std::abs(diag) < 1e-7f) diag = 1e-7f;
+        x[i] = sum / diag;
+        // Clamp weights to [0.0, 1.0]
+        if (x[i] < 0.0f) x[i] = 0.0f;
+        if (x[i] > 1.0f) x[i] = 1.0f;
+    }
+
+    env->ReleaseFloatArrayElements(landmarks, lmData, 0);
+    env->ReleaseFloatArrayElements(baseVertices, baseData, 0);
+    env->ReleaseIntArrayElements(morphIndices, idxData, 0);
+    env->ReleaseFloatArrayElements(morphDeltas, deltaData, 0);
+
+    jfloatArray result = env->NewFloatArray(M);
+    env->SetFloatArrayRegion(result, 0, M, x.data());
     return result;
 }
