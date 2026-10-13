@@ -95,7 +95,8 @@ intermediate rigs do not target Second Life. Studio defaults to a raster mesh
 preview for responsive camera interaction; the implicit field remains available
 for inspecting the continuous surface. Standalone build previews use the
 exported mesh. Fine features should be reviewed at an appropriate export
-resolution, rather than judged solely from the 64-cell Studio preview.
+resolution. Studio offers Draft, Detailed and Fine mesh previews (64, 96 and
+160 cells respectively), so finer anatomy can be reviewed before export.
 
 ## Photo reference review
 

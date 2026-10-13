@@ -161,7 +161,8 @@ fn handle(stream: TcpStream, program: &Path) -> io::Result<()> {
         },
         ("POST", "/api/preview-mesh") => match request_preview(text, &body) {
             Ok(p) => {
-                let mut opts = MeshOptions::new(64);
+                let resolution = body.get("preview_resolution").and_then(Value::as_u64).unwrap_or(96).clamp(32, 160) as u32;
+                let mut opts = MeshOptions::new(resolution);
                 opts.triangles = Some(30000);
                 let result = mesh(&p.shape, opts);
                 respond_json(&stream, "200 OK", &json!({"ok": true, "meta": p.meta,

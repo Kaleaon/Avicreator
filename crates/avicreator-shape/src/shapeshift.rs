@@ -444,6 +444,9 @@ pub fn preview_shift(
         from_text.len() + to_text.len(),
         glsl.len(),
     );
+    // Keep the preview framed across both endpoints, including progress 0/1.
+    let bounds = from.shape.bounds.union(to.shape.bounds).union(shape.bounds);
+    meta["bounds"] = serde_json::json!({"min": bounds.min.to_array(), "max": bounds.max.to_array()});
     meta["shapeshift"] =
         serde_json::json!({"from": from.shape.name, "to": to.shape.name, "progress": progress});
     Ok(Preview {
