@@ -194,6 +194,30 @@ pub fn shape_build_glb(program_json: &str, resolution: u32) -> Result<Vec<u8>, J
     Ok(avicreator_shape::build_glb(&p.shape, resolution, avicreator_shape::GlbOptions::default()).0)
 }
 
+/// Available authored forms, including minotaur, centaur and anthropomorphics.
+#[wasm_bindgen]
+pub fn shape_forms() -> String {
+    serde_json::json!(avicreator_shape::forms::FORMS.iter().map(|(name, text)|
+        serde_json::json!({"name": name, "text": text})).collect::<Vec<_>>()).to_string()
+}
+
+/// Compile a topology-independent shape-shift preview at progress within 0..1.
+#[wasm_bindgen]
+pub fn shape_shift_compile(from_json: &str, to_json: &str, progress: f32) -> Result<String, JsValue> {
+    let p = avicreator_shape::shapeshift::preview_shift(from_json, to_json, progress, None)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    Ok(serde_json::json!({"glsl": p.glsl, "meta": p.meta}).to_string())
+}
+
+/// Export an intermediate form as a remeshed, skinned GLB snapshot.
+#[wasm_bindgen]
+pub fn shape_shift_build_glb(from_json: &str, to_json: &str, progress: f32, resolution: u32) -> Result<Vec<u8>, JsValue> {
+    let p = avicreator_shape::shapeshift::preview_shift(from_json, to_json, progress, None)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let resolution = (resolution > 0).then(|| resolution.clamp(8, 320));
+    Ok(avicreator_shape::build_glb(&p.shape, resolution, avicreator_shape::GlbOptions {animation: false, ..Default::default()}).0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

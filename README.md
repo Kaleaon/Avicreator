@@ -10,6 +10,7 @@ The repository is structured into separate domain logic crates and target platfo
 - **`crates/avicreator-core`**: Pure Rust domain math, vector calculations (`Vec3`, `Quat`, `Mat4`), mesh operations, shape key morph blending, and vertex weight normalization. Marked with `#![forbid(unsafe_code)]`.
 - **`crates/avicreator-wasm`**: WebAssembly API bindings exposed via `wasm-bindgen` and `web-sys` for browser execution.
 - **`crates/avicreator-ffi`**: C-ABI function exports and C header generation via `cbindgen` for C/C++ native, iOS, and Android mobile bridge integration.
+- **`crates/avicreator-shape`**: Rig-aware implicit anatomy, muscle modelling, nine built-in forms, Shape Studio, topology-changing shape shifts, and skinned GLB/Second Life exports. See [muscle modelling and shape shifting](docs/muscle_modelling.md).
 
 ## Build & Test Instructions
 

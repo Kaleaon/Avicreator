@@ -13,9 +13,21 @@ use std::time::UNIX_EPOCH;
 
 use serde_json::{json, Value};
 
-use crate::{build_glb, glsl, preview, GlbOptions};
+use crate::{build_glb, glsl, preview, preview_in_pose, forms, shapeshift, mesh, MeshOptions, GlbOptions, Preview, ShapeError};
 
 const MAX_BODY: usize = 8 * 1024 * 1024;
+
+fn request_preview(text: &str, body: &Value) -> Result<Preview, ShapeError> {
+    let pose = body.get("pose").and_then(Value::as_str).filter(|p| !p.is_empty());
+    if let Some(target) = body.get("target").and_then(Value::as_str).filter(|t| !t.is_empty()) {
+        let target = forms::get(target).ok_or_else(|| ShapeError::Program("unknown target form".into()))?;
+        let progress = body.get("progress").and_then(Value::as_f64)
+            .ok_or_else(|| ShapeError::Program("shape shifting requires numeric progress within 0..1".into()))? as f32;
+        shapeshift::preview_shift(text, target, progress, pose)
+    } else {
+        preview_in_pose(text, &[], pose)
+    }
+}
 
 pub fn serve(program: PathBuf, listener: TcpListener) -> io::Result<()> {
     let program = Arc::new(program);
@@ -140,11 +152,24 @@ fn handle(stream: TcpStream, program: &Path) -> io::Result<()> {
                 &json!({ "text": source, "mtime": mtime(program), "path": program.display().to_string() }),
             )
         }
-        ("POST", "/api/compile") => match preview(text, &[]) {
+        ("GET", "/api/forms") => respond_json(&stream, "200 OK", &json!({
+            "forms": forms::FORMS.iter().map(|(name, text)| json!({"name": name, "text": text})).collect::<Vec<_>>()
+        })),
+        ("POST", "/api/compile") => match request_preview(text, &body) {
             Ok(p) => respond_json(&stream, "200 OK", &json!({ "ok": true, "glsl": p.glsl, "meta": p.meta })),
             Err(e) => respond_json(&stream, "200 OK", &json!({ "ok": false, "error": e.to_string() })),
         },
-        ("POST", "/api/glb") => match preview(text, &[]) {
+        ("POST", "/api/preview-mesh") => match request_preview(text, &body) {
+            Ok(p) => {
+                let mut opts = MeshOptions::new(64);
+                opts.triangles = Some(30000);
+                let result = mesh(&p.shape, opts);
+                respond_json(&stream, "200 OK", &json!({"ok": true, "meta": p.meta,
+                    "mesh": glsl::mesh_payload(&p.shape, &result.mesh)}))
+            },
+            Err(e) => respond_json(&stream, "200 OK", &json!({"ok": false, "error": e.to_string()})),
+        },
+        ("POST", "/api/glb") => match request_preview(text, &body) {
             Ok(p) => {
                 let resolution = body.get("resolution").and_then(Value::as_u64).map(|r| r.clamp(8, 320) as u32);
                 let animation = body.get("animation").and_then(Value::as_bool).unwrap_or(true);

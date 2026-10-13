@@ -72,6 +72,9 @@ dl.stats dt { color: var(--muted); }
 dl.stats dd { margin: 0; font-family: var(--mono); font-size: 12px; text-align: right; }
 
 .viewport { grid-area: view; position: relative; min-width: 0; min-height: 0; background: #17191d; }
+#form-controls > label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 5px; }
+#form-controls select { width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); background: var(--field); }
+#form-controls .param { margin-top: 12px; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 canvas:active { cursor: grabbing; }
 .overlay { position: absolute; left: 12px; bottom: 10px; color: #b9bdc5; font-size: 12px; pointer-events: none;
@@ -113,6 +116,19 @@ textarea { flex: 1; min-height: 0; resize: none; border: 0; outline: none; paddi
   </header>
 
   <aside>
+    <section class="studio-only" id="form-controls">
+      <h2>Forms &amp; shape shifting</h2>
+      <label for="form">Load form</label>
+      <select id="form"><option value="">Current program</option></select>
+      <label for="pose">Pose</label>
+      <select id="pose"><option value="">Rest</option></select>
+      <label for="shift-target">Shift toward</label>
+      <select id="shift-target"><option value="">Choose a form</option></select>
+      <div class="param"><div class="row"><label for="shift-progress">Transformation</label><output id="shift-value">0%</output></div>
+        <input id="shift-progress" type="range" min="0" max="1" step="0.01" value="0" disabled>
+      </div>
+      <p class="hint">Export captures the current form and pose. Load a form to edit its anatomy; Save writes it to the open file.</p>
+    </section>
     <section>
       <h2>Parameters</h2>
       <div id="params"></div>
@@ -120,6 +136,7 @@ textarea { flex: 1; min-height: 0; resize: none; border: 0; outline: none; paddi
     </section>
     <section>
       <h2>View</h2>
+      <label class="studio-only" for="renderer">Preview <select id="renderer"><option value="mesh">Mesh</option><option value="field">Implicit field</option></select></label>
       <div class="seg" role="group" aria-label="Shading">
         <button data-mode="0" aria-pressed="true">Clay</button>
         <button data-mode="1" aria-pressed="false">Parts</button>
@@ -331,6 +348,85 @@ const state = {
   mtime: 0, saved: "", path: "",
 };
 
+const MESH_VERT = `#version 300 es
+precision highp float;
+layout(location=0) in vec3 position;
+layout(location=1) in vec3 normal;
+layout(location=2) in vec3 color;
+layout(location=3) in vec4 joints;
+layout(location=4) in vec4 weights;
+uniform vec3 uEye, uTarget;
+uniform float uAspect;
+uniform int uSel;
+out vec3 N, C;
+out float W;
+void main() {
+ vec3 f=normalize(uTarget-uEye), r=normalize(cross(f,vec3(0,1,0))), u=cross(r,f);
+ vec3 p=position-uEye;
+ float z=dot(p,f), near=0.001, far=1000.0;
+ gl_Position=vec4(1.8*dot(p,r)/uAspect,1.8*dot(p,u),(far+near)/(far-near)*z-2.0*far*near/(far-near),z);
+ N=normal; C=color; W=dot(weights,vec4(equal(ivec4(joints),ivec4(uSel))));
+}`;
+const MESH_FRAG = `#version 300 es
+precision highp float;
+in vec3 N, C;
+in float W;
+uniform int uMode;
+out vec4 outColor;
+void main() {
+ if (uMode==3) {outColor=vec4(mix(C,vec3(1,0.5,0.1),clamp(W,0.0,1.0)),1);return;}
+ vec3 n=normalize(N), base=vec3(0.74,0.68,0.62);
+ if (uMode==1) base=C;
+ if (uMode==2) base=mix(vec3(0.05,0.18,0.48),vec3(1.0,0.25,0.08),clamp(W,0.0,1.0));
+ float key=max(dot(n,normalize(vec3(0.55,0.85,0.35))),0.0);
+ float fill=max(dot(n,normalize(vec3(-0.6,0.3,-0.4))),0.0);
+ outColor=vec4(base*(0.32+0.75*key+0.18*fill),1);
+}`;
+let raster = null;
+function rasterProgram() {
+ if (raster) return raster;
+ const vs=shader(gl.VERTEX_SHADER,MESH_VERT), fs=shader(gl.FRAGMENT_SHADER,MESH_FRAG), prog=gl.createProgram();
+ gl.attachShader(prog,vs);gl.attachShader(prog,fs);gl.linkProgram(prog);gl.deleteShader(vs);gl.deleteShader(fs);
+ if (!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+ raster={prog,loc:{}};
+ for(const n of ['uEye','uTarget','uAspect','uSel','uMode']) raster.loc[n]=gl.getUniformLocation(prog,n);
+ return raster;
+}
+function uploadMesh(data, meta) {
+ const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+ const buffers=[];
+ for(const [i,key,size] of [[0,'positions',3],[1,'normals',3],[2,'colors',3],[3,'joints',4],[4,'weights',4]]) {
+  const b=gl.createBuffer();buffers.push(b);gl.bindBuffer(gl.ARRAY_BUFFER,b);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data[key]),gl.STATIC_DRAW);gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,0,0);
+ }
+ const index=gl.createBuffer();buffers.push(index);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,index);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint32Array(data.indices),gl.STATIC_DRAW);
+ const bones=gl.createVertexArray();gl.bindVertexArray(bones);
+ const boneBuffers=[];
+ for(const [i,data,size] of [[0,meta.bones.flatMap(b=>[...b.head,...b.tail]),3],[2,meta.bones.flatMap(()=>[0.25,0.7,0.9,0.25,0.7,0.9]),3],[3,meta.bones.flatMap((b,i)=>[i,0,0,0,i,0,0,0]),4],[4,meta.bones.flatMap(()=>[1,0,0,0,1,0,0,0]),4]]) {
+  const b=gl.createBuffer();boneBuffers.push(b);gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,size,gl.FLOAT,false,0,0);
+ }
+ gl.bindVertexArray(null);
+ const ground=gl.createVertexArray();gl.bindVertexArray(ground);
+ const gp=[], span=scaleOf(meta), cx=(meta.bounds.min[0]+meta.bounds.max[0])/2, cz=(meta.bounds.min[2]+meta.bounds.max[2])/2;
+ for(let i=-10;i<=10;i++){const d=i*span/10;gp.push(cx+d,meta.ground,cz-span,cx+d,meta.ground,cz+span,cx-span,meta.ground,cz+d,cx+span,meta.ground,cz+d);}
+ const gb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,gb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(gp),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);gl.vertexAttrib3f(2,0.18,0.2,0.22);gl.vertexAttrib4f(4,0,0,0,0);
+ gl.bindVertexArray(null);
+ if(state.mesh) {for(const b of state.mesh.buffers) gl.deleteBuffer(b);for(const v of [state.mesh.vao,state.mesh.bones,state.mesh.ground])gl.deleteVertexArray(v);}
+ state.mesh={vao,bones,ground,buffers:[...buffers,...boneBuffers,gb],count:data.indices.length,boneCount:meta.bones.length*2,groundCount:gp.length/3};
+}
+function drawMesh() {
+ const r=rasterProgram(), L=r.loc, dpr=Math.min(window.devicePixelRatio||1,2);
+ const w=Math.max(1,Math.round(canvas.clientWidth*dpr)),h=Math.max(1,Math.round(canvas.clientHeight*dpr));
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+ gl.viewport(0,0,w,h);gl.clearColor(0.09,0.10,0.12,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.useProgram(r.prog);
+ gl.uniform3fv(L.uEye,eye());gl.uniform3fv(L.uTarget,state.cam.target);gl.uniform1f(L.uAspect,w/h);gl.uniform1i(L.uSel,state.sel);gl.uniform1i(L.uMode,state.mode);
+ gl.bindVertexArray(state.mesh.vao);gl.drawElements(gl.TRIANGLES,state.mesh.count,gl.UNSIGNED_INT,0);
+ if(state.ground){gl.uniform1i(L.uMode,3);gl.bindVertexArray(state.mesh.ground);gl.drawArrays(gl.LINES,0,state.mesh.groundCount);}
+ if(state.bones){gl.disable(gl.DEPTH_TEST);gl.uniform1i(L.uMode,3);gl.bindVertexArray(state.mesh.bones);gl.drawArrays(gl.LINES,0,state.mesh.boneCount);}
+ gl.bindVertexArray(null);gl.disable(gl.DEPTH_TEST);
+}
+
 function scaleOf(meta) {
   const b = meta.bounds;
   return Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
@@ -339,7 +435,9 @@ function scaleOf(meta) {
 function frameCamera() {
   const b = state.meta.bounds;
   state.cam.target = [0, 1, 2].map((i) => (b.min[i] + b.max[i]) / 2);
-  state.cam.dist = scaleOf(state.meta) * 1.15;
+  const radius = 0.5 * Math.hypot(...b.max.map((v, i) => v - b.min[i]));
+  const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
+  state.cam.dist = 1.1 * radius / Math.sin(Math.atan(Math.min(1, aspect) / 1.8));
   state.cam.yaw = 0.85;
   state.cam.pitch = 0.28;
 }
@@ -361,6 +459,7 @@ function requestRender(fast) {
 }
 
 function draw() {
+  if (state.mesh && state.meta && (!STUDIO || $("#renderer").value === "mesh")) { drawMesh(); return; }
   const p = state.gl, m = state.meta;
   if (!p || !m) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2) * (interacting ? 0.5 : 1);
@@ -486,6 +585,16 @@ function renderParams() {
     : "No params yet. Add \"params\" and reference them as \"$name\".";
 }
 
+function renderPoses() {
+  const host = $("#pose");
+  const value = host.value;
+  const names = state.meta.poses || [];
+  if (host.dataset.names === names.join("|")) return;
+  host.dataset.names = names.join("|");
+  host.replaceChildren(new Option("Rest", ""), ...names.map(n => new Option(n.replaceAll("_", " "), n)));
+  if (names.includes(value)) host.value = value;
+}
+
 function renderBones() {
   const host = $("#bones");
   host.innerHTML = "";
@@ -566,7 +675,7 @@ document.addEventListener("keydown", (e) => {
 function apply(glsl, meta) {
   if (!gl) { showError("WebGL2 is not available in this browser."); return false; }
   let built;
-  try { built = buildProgram(glsl); }
+  try { built = glsl ? buildProgram(glsl) : null; }
   catch (e) { showError("Shader: " + e.message); return false; }
   if (state.gl) gl.deleteProgram(state.gl.prog);
   state.gl = built;
@@ -575,7 +684,7 @@ function apply(glsl, meta) {
   if (!state.framed) { frameCamera(); state.framed = true; }
   $("#name").textContent = meta.name;
   $("#res").placeholder = meta.resolution;
-  renderParams(); renderBones(); renderParts(); renderStats();
+  renderParams(); renderPoses(); renderBones(); renderParts(); renderStats();
   if (meta.bones.length) $("#legend-bone").textContent = meta.bones[state.sel].name;
   showError("");
   setStatus(`${kib(meta.stats.program_bytes)} program → ${kib(meta.stats.glsl_bytes)} GLSL`, "ok");
@@ -607,22 +716,67 @@ function formatProgram(v, ind = "") {
 
 function markDirty() { $("#save").disabled = editor.value === state.saved; }
 
-let compileSeq = 0, compileTimer = 0;
+let compileSeq = 0, compileTimer = 0, compileBusy = false, compileAgain = false;
 function scheduleCompile(delay) {
+  ++compileSeq;
   clearTimeout(compileTimer);
   compileTimer = setTimeout(compileNow, delay);
 }
 async function compileNow() {
+  if (compileBusy) { compileAgain = true; return; }
+  compileBusy = true;
   const seq = ++compileSeq;
   try {
-    const res = await fetch("/api/compile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: editor.value }) });
+    const useMesh = $("#renderer").value === "mesh";
+    setStatus(useMesh ? "Building preview…" : "Compiling field…");
+    const res = await fetch(useMesh ? "/api/preview-mesh" : "/api/compile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(previewRequest()) });
     const data = await res.json();
     if (seq !== compileSeq) return;
     if (!data.ok) { showError(data.error); return; }
-    apply(data.glsl, data.meta);
+    if (useMesh) uploadMesh(data.mesh, data.meta);
+    apply(data.glsl || null, data.meta);
   } catch (e) {
     if (seq === compileSeq) showError("Studio server unreachable: " + e.message);
+  } finally {
+    compileBusy = false;
+    if (compileAgain) { compileAgain = false; scheduleCompile(0); }
   }
+}
+
+function previewRequest() {
+  return { text: editor.value, pose: $("#pose").value, target: $("#shift-target").value, progress: +$("#shift-progress").value };
+}
+
+async function loadForms() {
+  const res = await fetch("/api/forms");
+  if (!res.ok) throw new Error("Could not load form library");
+  const { forms } = await res.json();
+  for (const { name } of forms) {
+    $("#form").add(new Option(name, name));
+    $("#shift-target").add(new Option(name, name));
+  }
+  $("#form").addEventListener("change", () => {
+    const form = forms.find(f => f.name === $("#form").value);
+    if (!form) return;
+    editor.value = form.text;
+    $("#pose").value = "";
+    $("#shift-target").value = "";
+    $("#shift-progress").value = 0;
+    $("#shift-progress").disabled = true;
+    $("#shift-value").textContent = "0%";
+    state.framed = false;
+    lastExport = null;
+    markDirty(); scheduleCompile(0);
+  });
+  $("#pose").addEventListener("change", () => scheduleCompile(0));
+  $("#shift-target").addEventListener("change", () => {
+    $("#shift-progress").disabled = !$("#shift-target").value;
+    state.framed = false; scheduleCompile(0);
+  });
+  $("#shift-progress").addEventListener("input", () => {
+    $("#shift-value").textContent = Math.round(100 * +$("#shift-progress").value) + "%";
+    scheduleCompile(80);
+  });
 }
 
 function setParam(name, value) {
@@ -659,6 +813,7 @@ async function loadSource(force) {
 }
 
 if (STUDIO) {
+  $("#renderer").addEventListener("change", () => scheduleCompile(0));
   editor.addEventListener("input", () => { markDirty(); scheduleCompile(250); });
   editor.addEventListener("keydown", (e) => {
     if (e.key === "Tab") {
@@ -690,7 +845,7 @@ if (STUDIO) {
     btn.textContent = "Meshing…";
     try {
       const resolution = +$("#res").value || undefined;
-      const res = await fetch("/api/glb", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: editor.value, resolution }) });
+      const res = await fetch("/api/glb", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...previewRequest(), resolution, animation: !$("#shift-target").value }) });
       if (!res.ok) { showError((await res.json()).error); return; }
       lastExport = JSON.parse(res.headers.get("X-Avishape-Stats") || "null");
       const url = URL.createObjectURL(await res.blob());
@@ -706,12 +861,13 @@ if (STUDIO) {
       btn.textContent = "Export .glb";
     }
   });
-  loadSource(true).catch((e) => showError("Studio server unreachable: " + e.message));
+  loadForms().then(() => loadSource(true)).catch((e) => showError("Studio server unreachable: " + e.message));
   setInterval(() => loadSource(false).catch(() => {}), 1500);
 } else {
   $("#app").classList.add("static");
   document.title = EMBED.meta.name + " · Shape preview";
-  apply(EMBED.glsl, EMBED.meta);
+  if (EMBED.mesh) uploadMesh(EMBED.mesh, EMBED.meta);
+  apply(EMBED.glsl || null, EMBED.meta);
 }
 </script>
 </body>

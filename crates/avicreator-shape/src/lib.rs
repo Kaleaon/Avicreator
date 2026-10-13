@@ -15,7 +15,7 @@
 //! | Mesh exporter    | [`mesher::mesh`] + [`gltf::write_glb`] (skinned `.glb`)  |
 //! | Second Life      | [`sl::write_collada`] (rigged `.dae` on the SL skeleton) |
 //!
-//! See `docs/shape_programs.md` for the format and the design notes.
+//! See `docs/muscle_modelling.md` for muscle authoring, forms and shape shifting.
 
 pub mod compile;
 pub mod field;
@@ -28,6 +28,8 @@ pub mod sdf;
 pub mod simplify;
 pub mod sl;
 pub mod studio;
+pub mod shapeshift;
+pub mod forms;
 
 pub use compile::{compile, Bone, BoneLimits, CompiledPart, CompiledShape, Influence};
 pub use gltf::{write_glb, GlbOptions};
