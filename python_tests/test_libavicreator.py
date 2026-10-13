@@ -115,3 +115,33 @@ def test_fitter_and_rigger():
 
     assert isinstance(skinned, np.ndarray)
     assert skinned.shape == (1, 3)
+
+def test_multi_layer_fitter():
+    """Verify PyFitter multi-layer collision stack calculation in native rust wrapper."""
+    body_verts = [
+        [-1.0, -1.0, 0.0],
+        [ 1.0, -1.0, 0.0],
+        [ 1.0,  1.0, 0.0],
+        [-1.0,  1.0, 0.0],
+    ]
+    body_polys = [[0, 1, 2], [0, 2, 3]]
+    fitter = libavicreator.Fitter(body_verts, body_polys)
+
+    # Inner shirt layer at Z = 0.20
+    shirt_verts = [
+        [-1.0, -1.0, 0.20],
+        [ 1.0, -1.0, 0.20],
+        [ 1.0,  1.0, 0.20],
+        [-1.0,  1.0, 0.20],
+    ]
+    shirt_polys = [[0, 1, 2], [0, 2, 3]]
+    fitter.add_inner_layer(1, shirt_verts, shirt_polys)
+
+    # Outer jacket asset at Z = 0.10 penetrating inner shirt
+    jacket_verts = [[0.0, 0.0, 0.10]]
+    fitted = fitter.fit_asset_layer(jacket_verts, 2, max_distance=0.5, smoothing_iterations=1, min_clearance=0.005)
+
+    assert isinstance(fitted, np.ndarray)
+    assert fitted.shape == (1, 3)
+    # Jacket vertex must clear the inner shirt (Z >= 0.20 + 0.005)
+    assert fitted[0, 2] >= 0.205 - 1e-4

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "python")]
 use crate::{
-    fitting::{FittingConfig, Fitter},
+    fitting::{FittingConfig, Fitter, GarmentLayer},
     morpher::{BaseMesh, MorphTarget, Morpher, SparseDelta},
     rigging::{Bone, BonePose, Skeleton, VertexWeight},
     spatial::{BVHTree, KDTree},
@@ -222,6 +222,24 @@ impl PyFitter {
         Self { inner }
     }
 
+    pub fn add_inner_layer(
+        &mut self,
+        layer_depth: u32,
+        vertices: Vec<[f32; 3]>,
+        polygons: Vec<[usize; 3]>,
+    ) {
+        let vec3_verts: Vec<Vec3> = vertices.iter().map(|v| Vec3::from_slice(v)).collect();
+        self.inner.add_inner_layer(GarmentLayer {
+            layer_depth,
+            vertices: vec3_verts,
+            polygons,
+        });
+    }
+
+    pub fn clear_inner_layers(&mut self) {
+        self.inner.clear_inner_layers();
+    }
+
     pub fn fit_asset<'py>(
         &self,
         py: Python<'py>,
@@ -236,6 +254,26 @@ impl PyFitter {
             ..Default::default()
         };
         let fitted = self.inner.fit_asset(&vec3_asset, &config);
+        vec3_to_pyarray(py, fitted)
+    }
+
+    pub fn fit_asset_layer<'py>(
+        &self,
+        py: Python<'py>,
+        asset_vertices: Vec<[f32; 3]>,
+        layer_depth: u32,
+        max_distance: Option<f32>,
+        smoothing_iterations: Option<usize>,
+        min_clearance: Option<f32>,
+    ) -> Bound<'py, PyArray2<f32>> {
+        let vec3_asset: Vec<Vec3> = asset_vertices.iter().map(|v| Vec3::from_slice(v)).collect();
+        let config = FittingConfig {
+            max_distance: max_distance.unwrap_or(0.1),
+            min_clearance: min_clearance.unwrap_or(0.002),
+            smoothing_iterations: smoothing_iterations.unwrap_or(2),
+            ..Default::default()
+        };
+        let fitted = self.inner.fit_asset_layer(&vec3_asset, &config, layer_depth);
         vec3_to_pyarray(py, fitted)
     }
 }

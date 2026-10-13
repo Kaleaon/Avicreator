@@ -14,7 +14,7 @@ pub mod python;
 pub mod wasm;
 
 pub use fit_calc::FitCalc;
-pub use fitting::Fitter;
+pub use fitting::{FittingConfig, Fitter, GarmentLayer};
 pub use gltf_io::GltfIO;
 pub use morpher::Morpher;
 pub use rigging::Skeleton;
