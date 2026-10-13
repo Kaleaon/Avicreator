@@ -267,6 +267,11 @@ fn emit_influence(shape: &CompiledShape, out: &mut String) {
             Influence::Rigid { bone } => {
                 let _ = writeln!(out, "  return bone == {} ? 1.0 : 0.0;", bone);
             }
+            Influence::Muscle { bones, a, b } => {
+                let _ = writeln!(out,
+                    "  vec3 a = {}, ab = {}; float t = smoothstep(0.0, 1.0, clamp(dot(p - a, ab) / max(dot(ab, ab), 1e-12), 0.0, 1.0));\n  return (bone == {} ? 1.0 - t : 0.0) + (bone == {} ? t : 0.0);",
+                    v(*a), v(b.sub(*a)), bones[0], bones[1]);
+            }
             Influence::PerPrimitive => {
                 out.push_str("  float bd = 1e10; int bb = -1; float t;\n");
                 for prim in &shape.prims[part.prims.clone()] {
@@ -380,6 +385,8 @@ pub fn meta(program: &ShapeProgram, shape: &CompiledShape, program_bytes: usize,
     json!({
         "name": shape.name,
         "params": params,
+        "poses": program.poses.keys().collect::<Vec<_>>(),
+        "pose": program.pose,
         "ground": ground,
         "parts": parts,
         "bones": bones,
@@ -404,6 +411,30 @@ pub fn viewer_html(embed: Option<(&str, &Value)>) -> String {
         Some((glsl, meta)) => json!({ "glsl": glsl, "meta": meta }).to_string().replace("</", "<\\/"),
         None => "null".to_string(),
     };
+    VIEWER.replace("/*__EMBED__*/null", &payload)
+}
+
+/// Vertex data for a responsive browser preview, sampled from the same field
+/// and skin weights as mesh exports.
+pub fn mesh_payload(shape: &CompiledShape, mesh: &avicreator_core::Mesh) -> Value {
+    let colors: Vec<_> = mesh.positions.iter().map(|&v| {
+        shape.parts.iter().enumerate().filter(|(_, p)| p.op == Op::Union)
+            .map(|(i, p)| (shape.part_distance(i, v), p.color))
+            .min_by(|a, b| a.0.total_cmp(&b.0)).map_or([0.74, 0.68, 0.62], |(_, color)| color)
+    }).collect();
+    json!({
+        "positions": mesh.positions.iter().flat_map(|p| p.to_array()).collect::<Vec<_>>(),
+        "normals": mesh.normals.iter().flat_map(|p| p.to_array()).collect::<Vec<_>>(),
+        "indices": mesh.indices,
+        "colors": colors.into_iter().flatten().collect::<Vec<_>>(),
+        "joints": mesh.bone_indices.iter().flatten().collect::<Vec<_>>(),
+        "weights": mesh.bone_weights.iter().flatten().collect::<Vec<_>>()
+    })
+}
+
+/// Standalone raster preview of an exported mesh, including influence paint.
+pub fn viewer_mesh_html(meta: &Value, mesh: &Value) -> String {
+    let payload = json!({"meta": meta, "mesh": mesh}).to_string().replace("</", "<\\/");
     VIEWER.replace("/*__EMBED__*/null", &payload)
 }
 

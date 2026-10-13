@@ -191,6 +191,9 @@ impl CompiledShape {
         match &part.influence {
             Influence::None => Vec::new(),
             Influence::Rigid { bone } => vec![*bone],
+            Influence::Muscle { bones, .. } => {
+                if bones[0] == bones[1] { vec![bones[0]] } else { bones.to_vec() }
+            }
             Influence::Chain { bones, .. } | Influence::Nearest { bones } => bones.clone(),
             Influence::PerPrimitive => {
                 let mut bones: Vec<usize> = Vec::new();
@@ -247,6 +250,7 @@ impl CompiledShape {
         match &part.influence {
             Influence::None => Vec::new(),
             Influence::Rigid { bone } => vec![(*bone, 1.0)],
+            Influence::Muscle { bones, a, b } => muscle_shares(p, *bones, *a, *b),
             Influence::PerPrimitive => {
                 let nearest = self.prims[part.prims.clone()]
                     .iter()
@@ -278,6 +282,15 @@ fn combine(d: f32, dp: f32, op: Op, k: f32) -> f32 {
         Op::Union => smin(d, dp, k),
         Op::Subtract => smax(d, -dp, k),
     }
+}
+
+/// Smoothly cross-fade existing attachment bones along a muscle's axis.
+pub fn muscle_shares(p: Vec3, bones: [usize; 2], a: Vec3, b: Vec3) -> Vec<(usize, f32)> {
+    if bones[0] == bones[1] { return vec![(bones[0], 1.0)]; }
+    let ab = b.sub(a);
+    let t = (p.sub(a).dot(ab) / ab.length_squared().max(1e-12)).clamp(0.0, 1.0);
+    let t = t * t * (3.0 - 2.0 * t);
+    vec![(bones[0], 1.0 - t), (bones[1], t)]
 }
 
 /// Smooth fillet between a group and a partner. Group values already carry

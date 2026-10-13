@@ -1,6 +1,7 @@
 {
   "name": "dragon",
   "params": {
+    "muscle_mass": {"value": 1.0, "min": 0.5, "max": 1.6},
     "body_length": {"value": 1.3, "min": 0.8, "max": 2.0},
     "girth": {"value": 0.3, "min": 0.2, "max": 0.45},
     "leg_length": {"value": 0.75, "min": 0.45, "max": 1.2},
@@ -10,62 +11,371 @@
     "tail_curl": {"value": 30, "min": -60, "max": 120},
     "wing_span": {"value": 1.7, "min": 0.6, "max": 2.8},
     "horn_length": {"value": 0.38, "min": 0.1, "max": 0.8},
-    "horn_curl": {"value": 80, "min": 0, "max": 170}
+    "horn_curl": {"value": 80, "min": 0, "max": 170},
+    "muscle_definition": {"value": 0.6, "min": 0.0, "max": 1.0}
   },
   "settings": {"blend": 0.06, "resolution": 112},
+  "poses": {
+    "muscle_flex": {
+      "fore_leg.1.L": {"bend": 35},
+      "hind_leg.1.L": {"bend": -30},
+      "wing_arm.1.L": {"bend": 30}
+    }
+  },
   "parts": [
     {
-      "kind": "chain", "name": "spine", "from": [0, "$leg_length+0.25", "-$body_length*0.5"],
-      "dir": [0, 0.06, 1], "length": "$body_length", "segments": 3,
-      "radius": ["$girth*0.85", "$girth", "$girth*0.8"], "limits": {"bend": [-20, 20], "side": [-20, 20]}
-    },
-    {"kind": "blob", "name": "belly", "attach": "spine.1", "at": 0.5, "offset": [0, -0.07, 0], "radii": ["$girth*1.05", "$girth*0.95", "$body_length*0.42"], "bone": false},
-    {
-      "kind": "chain", "name": "neck", "attach": "spine", "dir": [0, 1, 0.55], "length": "$neck_length",
-      "segments": 4, "curl": "$neck_curl", "radius": ["$girth*0.62", 0.1], "limits": {"bend": [-35, 35]}
-    },
-    {"kind": "blob", "name": "head", "attach": "neck", "offset": [0, 0.04, 0.15], "axis": [0, -0.25, 1], "radii": [0.13, 0.12, 0.25], "limits": {"bend": [-30, 30]}},
-    {"kind": "chain", "name": "jaw", "attach": "head", "at": 0.2, "offset": [0, -0.06, 0], "dir": [0, -0.35, 1], "length": 0.3, "radius": [0.08, 0.035], "limits": {"bend": [-5, 35]}},
-    {"kind": "blob", "name": "eye_socket", "mirror": true, "op": "subtract", "blend": 0.02, "attach": "head", "at": 0.42, "offset": [0.105, 0.075, 0], "radii": 0.04},
-    {"kind": "blob", "name": "eye", "mirror": true, "blend": 0.0, "attach": "head", "at": 0.42, "offset": [0.095, 0.072, 0], "radii": 0.03, "bone": false},
-    {
-      "kind": "chain", "name": "horn", "mirror": true, "attach": "head", "at": 0.22, "offset": [0.07, 0.09, -0.04],
-      "dir": [0.3, 0.6, -0.75], "length": "$horn_length", "segments": 4, "curl": "-$horn_curl",
-      "radius": [0.045, 0.006], "limits": {"bend": [-5, 5], "side": [-5, 5], "twist": [0, 0]}
+      "kind": "chain",
+      "name": "spine",
+      "from": [0, "$leg_length+0.25", "-$body_length*0.5"],
+      "dir": [0, 0.06, 1],
+      "length": "$body_length",
+      "segments": 3,
+      "radius": ["$girth*0.85", "$girth", "$girth*0.8"],
+      "limits": {"bend": [-20, 20], "side": [-20, 20]}
     },
     {
-      "kind": "chain", "name": "tail", "attach": "spine.0", "at": 0, "dir": [0, -0.15, -1], "length": "$tail_length",
-      "segments": 8, "curl": "$tail_curl", "radius": ["$girth*0.8", 0.02], "limits": {"bend": [-25, 25], "side": [-30, 30]}
+      "kind": "blob",
+      "name": "belly",
+      "attach": "spine.1",
+      "at": 0.5,
+      "offset": [0, -0.07, 0],
+      "radii": ["$girth*1.05", "$girth*0.95", "$body_length*0.42"],
+      "bone": false
+    },
+    {
+      "kind": "chain",
+      "name": "neck",
+      "attach": "spine",
+      "dir": [0, 1, 0.55],
+      "length": "$neck_length",
+      "segments": 4,
+      "curl": "$neck_curl",
+      "radius": ["$girth*0.62", 0.1],
+      "limits": {"bend": [-35, 35]}
+    },
+    {
+      "kind": "blob",
+      "name": "head",
+      "attach": "neck",
+      "offset": [0, 0.04, 0.15],
+      "axis": [0, -0.25, 1],
+      "radii": [0.13, 0.12, 0.25],
+      "limits": {"bend": [-30, 30]}
+    },
+    {
+      "kind": "chain",
+      "name": "jaw",
+      "attach": "head",
+      "at": 0.2,
+      "offset": [0, -0.06, 0],
+      "dir": [0, -0.35, 1],
+      "length": 0.3,
+      "radius": [0.08, 0.035],
+      "limits": {"bend": [-5, 35]}
+    },
+    {
+      "kind": "blob",
+      "name": "eye_socket",
+      "mirror": true,
+      "op": "subtract",
+      "blend": 0.02,
+      "attach": "head",
+      "at": 0.42,
+      "offset": [0.105, 0.075, 0],
+      "radii": 0.04
+    },
+    {
+      "kind": "blob",
+      "name": "eye",
+      "mirror": true,
+      "blend": 0.0,
+      "attach": "head",
+      "at": 0.42,
+      "offset": [0.095, 0.072, 0],
+      "radii": 0.03,
+      "bone": false
+    },
+    {
+      "kind": "chain",
+      "name": "horn",
+      "mirror": true,
+      "attach": "head",
+      "at": 0.22,
+      "offset": [0.07, 0.09, -0.04],
+      "dir": [0.3, 0.6, -0.75],
+      "length": "$horn_length",
+      "segments": 4,
+      "curl": "-$horn_curl",
+      "radius": [0.045, 0.006],
+      "limits": {"bend": [-5, 5], "side": [-5, 5], "twist": [0, 0]}
+    },
+    {
+      "kind": "chain",
+      "name": "tail",
+      "attach": "spine.0",
+      "at": 0,
+      "dir": [0, -0.15, -1],
+      "length": "$tail_length",
+      "segments": 8,
+      "curl": "$tail_curl",
+      "radius": ["$girth*0.8", 0.02],
+      "limits": {"bend": [-25, 25], "side": [-30, 30]}
     },
     {"kind": "blob", "name": "tail_spade", "attach": "tail", "axis": [0, 0.2, -1], "radii": [0.11, 0.022, 0.14], "bone": false},
     {
-      "kind": "chain", "name": "hind_leg", "mirror": true, "attach": "spine.0", "at": 0.25, "offset": ["$girth*0.72", -0.1, 0],
-      "points": [[0.04, "-$leg_length*0.42", 0.2], [0.06, "-$leg_length*0.85", -0.02], [0.07, "-$leg_length-0.1", 0.12]],
-      "radius": [0.16, 0.1, 0.065, 0.05], "limits": {"bend": [-60, 60]}
+      "kind": "chain",
+      "name": "hind_leg",
+      "mirror": true,
+      "attach": "spine.0",
+      "at": 0.25,
+      "offset": ["$girth*0.72", -0.1, 0],
+      "points": [
+        [0.04, "-$leg_length*0.42", 0.2],
+        [0.06, "-$leg_length*0.85", -0.02],
+        [0.07, "-$leg_length-0.1", 0.12]
+      ],
+      "radius": [0.16, 0.1, 0.065, 0.05],
+      "limits": {"bend": [-60, 60]}
     },
-    {"kind": "blob", "name": "hind_foot", "mirror": true, "attach": "hind_leg", "offset": [0, -0.01, 0.06], "radii": [0.075, 0.04, 0.13], "bone": false},
     {
-      "kind": "chain", "name": "fore_leg", "mirror": true, "attach": "spine.2", "at": 0.45, "offset": ["$girth*0.66", -0.12, 0],
-      "points": [[0.05, "-$leg_length*0.45", -0.12], [0.06, "-$leg_length*0.86", 0.03], [0.07, "-$leg_length-0.08", 0.13]],
-      "radius": [0.12, 0.08, 0.055, 0.045], "limits": {"bend": [-60, 60]}
+      "kind": "blob",
+      "name": "hind_foot",
+      "mirror": true,
+      "attach": "hind_leg",
+      "offset": [0, -0.01, 0.06],
+      "radii": [0.075, 0.04, 0.13],
+      "bone": false
     },
-    {"kind": "blob", "name": "fore_foot", "mirror": true, "attach": "fore_leg", "offset": [0, -0.01, 0.05], "radii": [0.06, 0.035, 0.11], "bone": false},
     {
-      "kind": "chain", "name": "wing_arm", "mirror": true, "attach": "spine.2", "at": 0.1, "offset": ["$girth*0.55", "$girth*0.8", 0],
-      "points": [["$wing_span*0.32", 0.28, -0.12], ["$wing_span*0.6", 0.5, 0.06]], "bend_axis": [0, 0, 1],
-      "radius": [0.075, 0.05, 0.035], "limits": {"bend": [-40, 40]}
+      "kind": "chain",
+      "name": "fore_leg",
+      "mirror": true,
+      "attach": "spine.2",
+      "at": 0.45,
+      "offset": ["$girth*0.66", -0.12, 0],
+      "points": [
+        [0.05, "-$leg_length*0.45", -0.12],
+        [0.06, "-$leg_length*0.86", 0.03],
+        [0.07, "-$leg_length-0.08", 0.13]
+      ],
+      "radius": [0.12, 0.08, 0.055, 0.045],
+      "limits": {"bend": [-60, 60]}
     },
-    {"kind": "chain", "name": "wing_f1", "mirror": true, "attach": "wing_arm", "points": [["$wing_span*0.3", 0.1, 0.08], ["$wing_span*0.58", 0.02, -0.04]], "bend_axis": [0, 0, 1], "radius": [0.028, 0.008]},
-    {"kind": "chain", "name": "wing_f2", "mirror": true, "attach": "wing_arm", "points": [["$wing_span*0.25", -0.04, -0.3], ["$wing_span*0.45", -0.16, -0.62]], "bend_axis": [0, 0, 1], "radius": [0.025, 0.007]},
-    {"kind": "chain", "name": "wing_f3", "mirror": true, "attach": "wing_arm", "points": [["$wing_span*0.1", -0.14, -0.4], ["$wing_span*0.16", -0.34, -0.85]], "bend_axis": [0, 0, 1], "radius": [0.022, 0.007]},
     {
-      "kind": "chain", "name": "wing_flank", "mirror": true, "attach": "spine.2", "at": 0.1, "offset": ["$girth*0.7", "$girth*0.45", 0],
-      "points": [[0.06, -0.02, "-$body_length*0.35"], [0.1, -0.08, "-$body_length*0.7"]], "radius": 0.012, "limits": {"bend": [-10, 10]}
+      "kind": "blob",
+      "name": "fore_foot",
+      "mirror": true,
+      "attach": "fore_leg",
+      "offset": [0, -0.01, 0.05],
+      "radii": [0.06, 0.035, 0.11],
+      "bone": false
     },
-    {"kind": "membrane", "name": "wing_web", "mirror": true, "between": ["wing_f1", "wing_f2", "wing_f3", "wing_flank"], "thickness": 0.018, "blend": 0.02},
+    {
+      "kind": "chain",
+      "name": "wing_arm",
+      "mirror": true,
+      "attach": "spine.2",
+      "at": 0.1,
+      "offset": ["$girth*0.55", "$girth*0.8", 0],
+      "points": [
+        ["$wing_span*0.32", 0.28, -0.12],
+        ["$wing_span*0.6", 0.5, 0.06]
+      ],
+      "bend_axis": [0, 0, 1],
+      "radius": [0.075, 0.05, 0.035],
+      "limits": {"bend": [-40, 40]}
+    },
+    {
+      "kind": "chain",
+      "name": "wing_f1",
+      "mirror": true,
+      "attach": "wing_arm",
+      "points": [
+        ["$wing_span*0.3", 0.1, 0.08],
+        ["$wing_span*0.58", 0.02, -0.04]
+      ],
+      "bend_axis": [0, 0, 1],
+      "radius": [0.028, 0.008]
+    },
+    {
+      "kind": "chain",
+      "name": "wing_f2",
+      "mirror": true,
+      "attach": "wing_arm",
+      "points": [
+        ["$wing_span*0.25", -0.04, -0.3],
+        ["$wing_span*0.45", -0.16, -0.62]
+      ],
+      "bend_axis": [0, 0, 1],
+      "radius": [0.025, 0.007]
+    },
+    {
+      "kind": "chain",
+      "name": "wing_f3",
+      "mirror": true,
+      "attach": "wing_arm",
+      "points": [
+        ["$wing_span*0.1", -0.14, -0.4],
+        ["$wing_span*0.16", -0.34, -0.85]
+      ],
+      "bend_axis": [0, 0, 1],
+      "radius": [0.022, 0.007]
+    },
+    {
+      "kind": "chain",
+      "name": "wing_flank",
+      "mirror": true,
+      "attach": "spine.2",
+      "at": 0.1,
+      "offset": ["$girth*0.7", "$girth*0.45", 0],
+      "points": [
+        [0.06, -0.02, "-$body_length*0.35"],
+        [0.1, -0.08, "-$body_length*0.7"]
+      ],
+      "radius": 0.012,
+      "limits": {"bend": [-10, 10]}
+    },
+    {
+      "kind": "membrane",
+      "name": "wing_web",
+      "mirror": true,
+      "between": ["wing_f1", "wing_f2", "wing_f3", "wing_flank"],
+      "thickness": 0.018,
+      "blend": 0.02
+    },
     {"kind": "membrane", "name": "wing_inner", "mirror": true, "between": ["wing_arm", "wing_flank"], "thickness": 0.018, "blend": 0.02},
     {"kind": "array", "name": "back_spikes", "along": "spine", "count": 5, "range": [0.05, 0.95], "size": [0.05, "$girth*0.55"], "lean": 25},
     {"kind": "array", "name": "neck_spikes", "along": "neck", "count": 4, "range": [0.1, 0.8], "size": [0.035, 0.12], "taper": 0.7, "lean": 30},
-    {"kind": "array", "name": "tail_spikes", "along": "tail", "count": 9, "range": [0.02, 0.8], "size": [0.045, 0.16], "taper": 0.35, "lean": -25}
+    {"kind": "array", "name": "tail_spikes", "along": "tail", "count": 9, "range": [0.02, 0.8], "size": [0.045, 0.16], "taper": 0.35, "lean": -25},
+    {
+      "kind": "muscle",
+      "name": "epaxial",
+      "mirror": true,
+      "origin": {"attach": "spine.0", "at": 0.2, "offset": ["$girth*0.45", "$girth*0.6", 0]},
+      "insertion": {"attach": "spine.2", "at": 0.8, "offset": ["$girth*0.35", "$girth*0.5", 0]},
+      "radius": "$girth*0.3*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "neck_muscle",
+      "mirror": true,
+      "origin": {"attach": "spine.2", "at": 0.8, "offset": ["$girth*0.3", 0, 0]},
+      "insertion": {"attach": "neck.0", "at": 0.8, "offset": ["$girth*0.2", 0, 0]},
+      "radius": "$girth*0.25*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "fore_leg_flexor",
+      "mirror": true,
+      "origin": {"attach": "fore_leg.0", "at": 0.1, "offset": [0, 0, 0.05]},
+      "insertion": {"attach": "fore_leg.1", "at": 0.1, "offset": [0, 0, 0.03]},
+      "radius": "0.1*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "fore_leg_extensor",
+      "mirror": true,
+      "origin": {"attach": "fore_leg.0", "at": 0.1, "offset": [0, 0, -0.05]},
+      "insertion": {"attach": "fore_leg.1", "at": 0.05, "offset": [0, 0, -0.03]},
+      "radius": "0.08000000000000002*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "fore_leg_calf",
+      "mirror": true,
+      "origin": {"attach": "fore_leg.1", "at": 0.15, "offset": [0, 0, -0.034999999999999996]},
+      "insertion": {"attach": "fore_leg.1", "at": 0.9, "offset": [0, 0, -0.015]},
+      "radius": "0.065*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "hind_leg_flexor",
+      "mirror": true,
+      "origin": {"attach": "hind_leg.0", "at": 0.1, "offset": [0, 0, 0.07]},
+      "insertion": {"attach": "hind_leg.1", "at": 0.1, "offset": [0, 0, 0.042]},
+      "radius": "0.14*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "hind_leg_extensor",
+      "mirror": true,
+      "origin": {"attach": "hind_leg.0", "at": 0.1, "offset": [0, 0, -0.07]},
+      "insertion": {"attach": "hind_leg.1", "at": 0.05, "offset": [0, 0, -0.042]},
+      "radius": "0.11200000000000002*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "hind_leg_calf",
+      "mirror": true,
+      "origin": {"attach": "hind_leg.1", "at": 0.15, "offset": [0, 0, -0.049]},
+      "insertion": {"attach": "hind_leg.1", "at": 0.9, "offset": [0, 0, -0.021]},
+      "radius": "0.09100000000000001*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_0",
+      "mirror": true,
+      "origin": {"attach": "tail.0", "at": 0.1, "offset": ["$girth*0.2", 0, 0]},
+      "insertion": {"attach": "tail.0", "at": 0.9, "offset": ["$girth*0.2", 0, 0]},
+      "radius": "$girth*0.300*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_1",
+      "mirror": true,
+      "origin": {"attach": "tail.1", "at": 0.1, "offset": ["$girth*0.2", 0, 0]},
+      "insertion": {"attach": "tail.1", "at": 0.9, "offset": ["$girth*0.2", 0, 0]},
+      "radius": "$girth*0.150*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_2",
+      "mirror": true,
+      "origin": {"attach": "tail.2", "at": 0.1, "offset": ["$girth*0.2", 0, 0]},
+      "insertion": {"attach": "tail.2", "at": 0.9, "offset": ["$girth*0.2", 0, 0]},
+      "radius": "$girth*0.100*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "wing_pectoralis",
+      "mirror": true,
+      "origin": {"attach": "spine.2", "at": 0.2, "offset": ["$girth*0.5", 0, 0]},
+      "insertion": {"attach": "wing_arm.0", "at": 0.5, "offset": [0, -0.02, 0]},
+      "radius": "$girth*0.28*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "wing_flexor",
+      "mirror": true,
+      "origin": {"attach": "wing_arm.0", "at": 0.1, "offset": [0, 0, 0.03]},
+      "insertion": {"attach": "wing_arm.1", "at": 0.1, "offset": [0, 0, 0.02]},
+      "radius": "0.065*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    }
   ]
 }

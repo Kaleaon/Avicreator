@@ -21,6 +21,8 @@ USAGE:
 PLACEMENT: [--scale S] [--rotate-y DEGREES] [--ground] [--match-height] [--landmarks FILE.json]
 Any command takes --pose NAME to compile in one of the program's named poses (e.g. to
 match a reference standing in anatomical position rather than T-pose).
+check/build also take --target FORM_OR_JSON --progress 0..1 to shape-shift.
+Built-in forms: human, canine, feline, vulpine, minotaur, centaur, scaly, lizard, dragon.
 
 check   Validate the program and list its parts, bones and sizes (no meshing).
 build   Write <name>.glb (skinned mesh + skeleton + 'flex' clip), <name>.html
@@ -54,6 +56,8 @@ struct Args {
     match_height: bool,
     landmarks: Option<PathBuf>,
     pose: Option<String>,
+    target: Option<String>,
+    progress: f32,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -86,10 +90,17 @@ fn parse_args() -> Result<Args, String> {
         match_height: false,
         landmarks: None,
         pose: None,
+        target: None,
+        progress: 0.0,
     };
     while let Some(flag) = it.next() {
         let mut value = |name: &str| it.next().ok_or(format!("{} needs a value", name));
         match flag.as_str() {
+            "--target" => args.target = Some(value("--target")?),
+            "--progress" => {
+                args.progress = value("--progress")?.parse().map_err(|_| "--progress must be a number within 0..1")?;
+                if !args.progress.is_finite() || !(0.0..=1.0).contains(&args.progress) { return Err("--progress must be finite and within 0..1".into()); }
+            }
             "--out" => args.out = PathBuf::from(value("--out")?),
             "--resolution" => {
                 let r: u32 = value("--resolution")?.parse().map_err(|_| "--resolution must be a whole number")?;
@@ -135,7 +146,16 @@ fn kib(bytes: usize) -> String {
 fn run(args: Args) -> Result<(), String> {
     let text = std::fs::read_to_string(&args.program).map_err(|e| format!("{}: {}", args.program.display(), e))?;
     let started = Instant::now();
-    let p = preview_in_pose(&text, &args.sets, args.pose.as_deref()).map_err(|e| e.to_string())?;
+    let p = if let Some(target) = &args.target {
+        if !matches!(args.command.as_str(), "check" | "build") { return Err("--target is supported by check and build".into()); }
+        let target = match avicreator_shape::forms::get(target) {
+            Some(text) => text.to_string(),
+            None => std::fs::read_to_string(target).map_err(|e| format!("target {}: {}", target, e))?,
+        };
+        let mut program = avicreator_shape::ShapeProgram::from_json(&text).map_err(|e| e.to_string())?;
+        for (name, value) in &args.sets { program.set_param(name, *value).map_err(|e| e.to_string())?; }
+        avicreator_shape::shapeshift::preview_shift(&program.to_json(), &target, args.progress, args.pose.as_deref()).map_err(|e| e.to_string())?
+    } else { preview_in_pose(&text, &args.sets, args.pose.as_deref()).map_err(|e| e.to_string())? };
     let compile_ms = started.elapsed().as_secs_f64() * 1000.0;
 
     match args.command.as_str() {
@@ -163,14 +183,14 @@ fn run(args: Args) -> Result<(), String> {
                 Ok(path)
             };
             let glsl_path = write("glsl", p.glsl.as_bytes())?;
-            let html_path = write("html", glsl::viewer_html(Some((&p.glsl, &p.meta))).as_bytes())?;
             let mut opts = mesh_options(&p.shape, args.resolution);
             if args.triangles.is_some() {
                 opts.triangles = args.triangles;
             }
             let result = mesh(&p.shape, opts);
+            let html_path = write("html", glsl::viewer_mesh_html(&p.meta, &glsl::mesh_payload(&p.shape, &result.mesh)).as_bytes())?;
             let stats = &result.stats;
-            let glb = gltf::write_glb(&p.shape, &result.mesh, GlbOptions { animation: args.animation, ..GlbOptions::default() });
+            let glb = gltf::write_glb(&p.shape, &result.mesh, GlbOptions { animation: args.animation && p.shape.transition.is_none(), ..GlbOptions::default() });
             let glb_path = write("glb", &glb)?;
             let dae = (p.shape.skeleton == SkeletonTarget::SecondLife)
                 .then(|| write("dae", sl::write_collada(&p.shape, &result.mesh).as_bytes()))
