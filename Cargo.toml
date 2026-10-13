@@ -65,7 +65,7 @@ thiserror = "1.0"
 cbindgen = "0.27"
 
 [profile.release]
-opt-level = "z"
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
@@ -75,3 +75,6 @@ strip = true
 # though the rest of the release profile targets size.
 [profile.release.package.avicreator-shape]
 opt-level = 3
+
+[profile.release.package.avicreator-wasm]
+opt-level = "z"
