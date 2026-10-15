@@ -437,5 +437,8 @@ mod tests {
         assert_eq!(meta["bones"].as_array().unwrap().len(), 4);
         let html = viewer_html(Some((&glsl, &meta)));
         assert!(html.contains("float map(vec3 p)") && !html.contains("/*__EMBED__*/"));
+        assert!(html.contains("--ktheme-bg:"), "missing --ktheme-bg token custom property");
+        assert!(html.contains("id=\"theme-select\""), "missing #theme-select element");
+        assert!(html.contains("applyKthemePreset"), "missing applyKthemePreset logic");
     }
 }
