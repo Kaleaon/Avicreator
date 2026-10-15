@@ -197,4 +197,3 @@ def test_apply_surface_clearance_input_validation_edge_cases():
         min_clearance="invalid", max_relaxation_passes=-5
     )
     assert len(safe_res) == 1
-
