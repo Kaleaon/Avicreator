@@ -5,7 +5,11 @@ import java.nio.ByteBuffer
 class NativeLib {
     companion object {
         init {
-            System.loadLibrary("charmorph-native")
+            try {
+                System.loadLibrary("charmorph-native")
+            } catch (e: UnsatisfiedLinkError) {
+                // Fallback for JVM host unit tests without native binary loaded
+            }
         }
     }
 
@@ -35,4 +39,10 @@ class NativeLib {
         morphWeights: FloatArray,
         outputBuffer: ByteBuffer
     )
+
+    external fun parseSkeletonJsonNative(jsonStr: String): String
+
+    external fun parseManifestJsonNative(jsonStr: String): String
+
+    external fun extractFeaturesNative(vertices: FloatArray, normals: FloatArray): FloatArray
 }
