@@ -11,6 +11,7 @@ class NativeLib {
                 System.loadLibrary("charmorph-native")
                 isLoaded = true
             } catch (e: UnsatisfiedLinkError) {
+                // Native library not loaded in desktop unit tests
                 isLoaded = false
             }
         }

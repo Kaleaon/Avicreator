@@ -1,5 +1,5 @@
 use avicreator_core::{
-    BVHTree, FalloffCurve, Mesh, Ray, SculptContext, SculptMode, Vec3,
+    BVHTree, FalloffCurve, Mesh, SculptContext, SculptMode, Vec3,
 };
 use std::time::Instant;
 

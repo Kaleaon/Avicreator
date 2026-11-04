@@ -32,6 +32,7 @@ android {
 dependencies {
     implementation(project(":core-model"))
     implementation(project(":ml-engine"))
+    implementation(project(":native-bridge"))
     implementation("androidx.core:core-ktx:1.13.1")
 
     implementation("androidx.activity:activity-compose:1.9.1")
@@ -40,4 +41,10 @@ dependencies {
 
     // ML Kit for Face Detection (Placeholder)
     implementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("org.robolectric:robolectric:4.12.2")
 }
