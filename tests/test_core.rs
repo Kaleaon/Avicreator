@@ -1,9 +1,8 @@
 use libavicreator::{
-    math::{Ray, Triangle},
-    morpher::{BaseMesh, MorphDelta, MorphTarget, Morpher, SparseDelta},
-    rigging::{Bone, BonePose, Skeleton, VertexWeight},
+    morpher::{BaseMesh, MorphTarget, Morpher},
+    rigging::{Bone, Skeleton, VertexWeight},
     spatial::{BVHTree, KDTree},
-    FitCalc, Fitter, GltfIO,
+    Fitter,
 };
 use glam::Vec3;
 use std::collections::HashMap;
@@ -35,7 +34,7 @@ fn test_kdtree_search() {
     ];
     let kdtree = KDTree::build(&points);
 
-    let (pt, idx, dist) = kdtree.find_nearest(Vec3::new(0.1, 0.1, 0.0)).unwrap();
+    let (_pt, idx, dist) = kdtree.find_nearest(Vec3::new(0.1, 0.1, 0.0)).unwrap();
     assert_eq!(idx, 0);
     assert!(dist < 0.2);
 }
@@ -140,6 +139,34 @@ fn test_fitter_and_rigging() {
     let config = Default::default();
     let fitted = fitter.fit_asset(&asset_verts, &config);
     assert_eq!(fitted.len(), 1);
+
+    // Test volume preservation with asset polygons
+    let cube_verts = vec![
+        Vec3::new(2.0, 2.0, 2.0),
+        Vec3::new(3.0, 2.0, 2.0),
+        Vec3::new(3.0, 3.0, 2.0),
+        Vec3::new(2.0, 3.0, 2.0),
+        Vec3::new(2.0, 2.0, 3.0),
+        Vec3::new(3.0, 2.0, 3.0),
+        Vec3::new(3.0, 3.0, 3.0),
+        Vec3::new(2.0, 3.0, 3.0),
+    ];
+    let cube_polys = vec![
+        [0, 3, 2], [0, 2, 1],
+        [4, 5, 6], [4, 6, 7],
+        [0, 1, 5], [0, 5, 4],
+        [2, 3, 7], [2, 7, 6],
+        [0, 4, 7], [0, 7, 3],
+        [1, 2, 6], [1, 6, 5],
+    ];
+    let init_vol = libavicreator::fitting::compute_mesh_volume(&cube_verts, &cube_polys);
+    let fitted_vol_mesh = fitter.fit_asset_with_polygons(&cube_verts, Some(&cube_polys), &config);
+    let final_vol = libavicreator::fitting::compute_mesh_volume(&fitted_vol_mesh, &cube_polys);
+    assert!((final_vol - init_vol).abs() / init_vol.abs() < 0.02);
+
+    // Empty vertex input handling
+    let empty_fitted = fitter.fit_asset(&[], &config);
+    assert!(empty_fitted.is_empty());
 
     // Test Skeleton skinning
     let bone = Bone::new("root", Vec3::ZERO, Vec3::Y, None);

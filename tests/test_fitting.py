@@ -5,7 +5,12 @@ import numpy as np
 
 import pytest
 from lib.fit_calc import Geometry, SoftBinder, HardBinder
-from lib.fitting import apply_surface_clearance_and_relaxation, build_adjacency_list
+from lib.fitting import (
+    apply_surface_clearance_and_relaxation,
+    build_adjacency_list,
+    compute_mesh_volume,
+    compute_mesh_dispersion,
+)
 
 
 def create_cube_geometry(scale=1.0, offset=(0.0, 0.0, 0.0)):
@@ -207,3 +212,49 @@ def test_multi_layer_composite_collision_stack_and_refitting():
 
     # Outer jacket must clear the inner shirt (Z >= 1.1 + 0.002 = 1.102)
     assert result_composite[0][2] >= 1.102 - 1e-5
+
+
+def test_volume_preservation_laplacian_relaxation():
+    char_geom = create_cube_geometry(scale=1.0)
+    asset_geom = create_cube_geometry(scale=1.0, offset=(3.0, 3.0, 3.0))
+
+    initial_vol = compute_mesh_volume(asset_geom.verts, asset_geom.faces)
+    assert abs(initial_vol) > 0.1
+
+    relaxed_verts = apply_surface_clearance_and_relaxation(
+        asset_geom.verts, asset_geom.faces, char_geom,
+        min_clearance=0.002,
+        max_relaxation_passes=5
+    )
+
+    final_vol = compute_mesh_volume(relaxed_verts, asset_geom.faces)
+    assert abs(final_vol - initial_vol) / abs(initial_vol) < 0.02
+
+
+def test_apply_surface_clearance_input_validation_edge_cases():
+    char_geom = create_cube_geometry(scale=1.0)
+
+    # Empty array
+    empty_res = apply_surface_clearance_and_relaxation(
+        np.empty((0, 3)), [(0, 1)], char_geom
+    )
+    assert len(empty_res) == 0
+
+    # Invalid shape
+    invalid_res = apply_surface_clearance_and_relaxation(
+        np.array([1.0, 2.0, 3.0]), [(0, 1)], char_geom
+    )
+    assert invalid_res.ndim == 1
+
+    # Out of bounds face indices
+    oob_res = apply_surface_clearance_and_relaxation(
+        np.array([[0.0, 0.0, 2.0], [0.1, 0.0, 2.0]]), [(0, 999)], char_geom
+    )
+    assert len(oob_res) == 2
+
+    # Non-numeric clearance / pass parameters
+    safe_res = apply_surface_clearance_and_relaxation(
+        np.array([[0.0, 0.0, 2.0]]), [(0, 0)], char_geom,
+        min_clearance="invalid", max_relaxation_passes=-5
+    )
+    assert len(safe_res) == 1
