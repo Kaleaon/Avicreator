@@ -25,7 +25,7 @@ impl Default for FittingConfig {
 pub struct Fitter {
     bvh: BVHTree,
     kdtree: KDTree,
-    body_vertices: Vec<Vec3>,
+    _body_vertices: Vec<Vec3>,
 }
 
 impl Fitter {
@@ -35,7 +35,7 @@ impl Fitter {
         Self {
             bvh,
             kdtree,
-            body_vertices,
+            _body_vertices: body_vertices,
         }
     }
 
