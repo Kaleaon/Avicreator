@@ -87,6 +87,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("com.google.dagger:hilt-android:2.51.1")
     kapt("com.google.dagger:hilt-compiler:2.51.1")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    kapt("androidx.hilt:hilt-compiler:1.2.0")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.8")
@@ -100,6 +102,7 @@ dependencies {
     testImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("org.robolectric:robolectric:4.12.2")
     testImplementation("androidx.compose.ui:ui-test-junit4:1.6.8")
+    testImplementation("androidx.work:work-testing:2.9.1")
 }
 
 kapt {
