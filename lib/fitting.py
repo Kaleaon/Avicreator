@@ -182,6 +182,44 @@ def build_adjacency_list(faces, num_verts):
     return [numpy.array(list(neighbors), dtype=numpy.int32) if neighbors else numpy.array([], dtype=numpy.int32) for neighbors in adj]
 
 
+def compute_mesh_volume(verts: numpy.ndarray, faces: list) -> float:
+    """
+    Computes signed 3D enclosed volume of a polygonal mesh using divergence theorem.
+    Returns 0.0 if verts or faces are invalid/empty or volume cannot be calculated.
+    """
+    if verts is None or len(verts) == 0 or not faces:
+        return 0.0
+    num_verts = len(verts)
+    vol = 0.0
+    for f in faces:
+        if len(f) < 3:
+            continue
+        v0_idx = f[0]
+        if v0_idx >= num_verts:
+            continue
+        v0 = verts[v0_idx]
+        for i in range(1, len(f) - 1):
+            v1_idx, v2_idx = f[i], f[i + 1]
+            if v1_idx >= num_verts or v2_idx >= num_verts:
+                continue
+            v1 = verts[v1_idx]
+            v2 = verts[v2_idx]
+            cross = numpy.cross(v1, v2)
+            vol += numpy.dot(v0, cross)
+    return float(vol / 6.0)
+
+
+def compute_mesh_dispersion(verts: numpy.ndarray) -> tuple:
+    """
+    Computes centroid and mean radial distance (dispersion) of vertices.
+    """
+    if verts is None or len(verts) == 0:
+        return numpy.zeros(3, dtype=numpy.float64), 0.0
+    centroid = numpy.mean(verts, axis=0)
+    disp = float(numpy.mean(numpy.linalg.norm(verts - centroid, axis=1)))
+    return centroid, disp
+
+
 def apply_surface_clearance_and_relaxation(
     verts: numpy.ndarray,
     asset_faces: list,
@@ -192,16 +230,32 @@ def apply_surface_clearance_and_relaxation(
 ) -> numpy.ndarray:
     """
     Executes post-fitting BVH distance ray-cast check, surface clearance projection,
-    and iterative Laplacian mesh relaxation in memory using NumPy buffer operations.
+    and iterative volume-constrained Laplacian mesh relaxation in memory using NumPy.
     """
-    if len(verts) == 0 or char_geom is None or getattr(char_geom, "bvh", None) is None:
+    if verts is None or not isinstance(verts, numpy.ndarray) or len(verts) == 0:
+        return verts
+    if verts.ndim != 2 or verts.shape[1] != 3:
+        logger.warning("Invalid vertex array shape for relaxation: %s", getattr(verts, "shape", None))
+        return verts
+
+    try:
+        min_clearance = max(0.0, float(min_clearance))
+    except (ValueError, TypeError):
+        min_clearance = 0.002
+
+    try:
+        max_relaxation_passes = max(0, int(max_relaxation_passes))
+    except (ValueError, TypeError):
+        max_relaxation_passes = 5
+
+    if char_geom is None or getattr(char_geom, "bvh", None) is None:
         return verts
 
     masked_body_verts = masked_body_verts or set()
     num_verts = len(verts)
     adj_list = build_adjacency_list(asset_faces, num_verts)
     bvh = char_geom.bvh
-    char_faces = char_geom.faces
+    char_faces = getattr(char_geom, "faces", [])
 
     # 1. Post-fitting BVH distance & ray-cast clearance check + outward normal projection
     projected_verts = verts.copy()
@@ -213,8 +267,10 @@ def apply_surface_clearance_and_relaxation(
             continue
         loc, normal, face_idx, dist = res[0], res[1], res[2], res[3]
 
+        if face_idx >= len(char_faces):
+            continue
         c_face = char_faces[face_idx]
-        if masked_body_verts and all(vi in masked_body_verts for vi in c_face):
+        if masked_body_verts and all(vi in masked_body_verts for vi in c_face if vi < len(char_geom.verts)):
             continue
 
         norm = numpy.array(normal, dtype=numpy.float64)
@@ -230,9 +286,12 @@ def apply_surface_clearance_and_relaxation(
         if signed_dist < min_clearance:
             projected_verts[i] = numpy.array(loc, dtype=numpy.float64) + norm * min_clearance
 
-    # 2. Iterative Laplacian mesh relaxation (capped at max 5 passes)
+    # 2. Iterative volume-constrained Laplacian mesh relaxation
     relaxation_passes = min(max_relaxation_passes, 5)
     curr_verts = projected_verts.copy()
+
+    init_vol = compute_mesh_volume(curr_verts, asset_faces)
+    init_centroid, init_disp = compute_mesh_dispersion(curr_verts)
 
     for _pass in range(relaxation_passes):
         next_verts = curr_verts.copy()
@@ -246,18 +305,51 @@ def apply_surface_clearance_and_relaxation(
 
             res = bvh.find_nearest(smoothed_co.tolist())
             if res is not None and res[0] is not None and res[2] is not None:
-                c_face = char_faces[res[2]]
-                if not (masked_body_verts and all(vi in masked_body_verts for vi in c_face)):
-                    norm = numpy.array(res[1], dtype=numpy.float64)
-                    norm_len = numpy.linalg.norm(norm)
-                    if norm_len > 1e-12:
-                        norm /= norm_len
-                        v_vec = smoothed_co - numpy.array(res[0], dtype=numpy.float64)
-                        signed_dist = float(numpy.dot(v_vec, norm))
-                        if signed_dist < min_clearance:
-                            smoothed_co = numpy.array(res[0], dtype=numpy.float64) + norm * min_clearance
+                if res[2] < len(char_faces):
+                    c_face = char_faces[res[2]]
+                    if not (masked_body_verts and all(vi in masked_body_verts for vi in c_face if vi < len(char_geom.verts))):
+                        norm = numpy.array(res[1], dtype=numpy.float64)
+                        norm_len = numpy.linalg.norm(norm)
+                        if norm_len > 1e-12:
+                            norm /= norm_len
+                            v_vec = smoothed_co - numpy.array(res[0], dtype=numpy.float64)
+                            signed_dist = float(numpy.dot(v_vec, norm))
+                            if signed_dist < min_clearance:
+                                smoothed_co = numpy.array(res[0], dtype=numpy.float64) + norm * min_clearance
 
             next_verts[i] = smoothed_co
+
+        # Apply volumetric / dispersion constraint to restore original mass
+        cand_vol = compute_mesh_volume(next_verts, asset_faces)
+        cand_centroid, cand_disp = compute_mesh_dispersion(next_verts)
+
+        beta = 1.0
+        if abs(init_vol) > 1e-9 and abs(cand_vol) > 1e-9:
+            beta = (abs(init_vol) / abs(cand_vol)) ** (1.0 / 3.0)
+        elif init_disp > 1e-9 and cand_disp > 1e-9:
+            beta = init_disp / cand_disp
+
+        # Clamp scale factor to prevent numerical instability
+        beta = float(numpy.clip(beta, 0.1, 10.0))
+
+        if abs(beta - 1.0) > 1e-6:
+            next_verts = cand_centroid + beta * (next_verts - cand_centroid)
+
+            # Re-enforce clearance after volumetric scaling
+            for i in range(num_verts):
+                res = bvh.find_nearest(next_verts[i].tolist())
+                if res is not None and res[0] is not None and res[2] is not None:
+                    if res[2] < len(char_faces):
+                        c_face = char_faces[res[2]]
+                        if not (masked_body_verts and all(vi in masked_body_verts for vi in c_face if vi < len(char_geom.verts))):
+                            norm = numpy.array(res[1], dtype=numpy.float64)
+                            norm_len = numpy.linalg.norm(norm)
+                            if norm_len > 1e-12:
+                                norm /= norm_len
+                                v_vec = next_verts[i] - numpy.array(res[0], dtype=numpy.float64)
+                                signed_dist = float(numpy.dot(v_vec, norm))
+                                if signed_dist < min_clearance:
+                                    next_verts[i] = numpy.array(res[0], dtype=numpy.float64) + norm * min_clearance
 
         curr_verts = next_verts
 

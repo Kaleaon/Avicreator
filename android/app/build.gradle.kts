@@ -102,6 +102,7 @@ dependencies {
     testImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("org.robolectric:robolectric:4.12.2")
     testImplementation("androidx.compose.ui:ui-test-junit4:1.6.8")
+    testImplementation("androidx.work:work-testing:2.9.1")
 }
 
 kapt {
