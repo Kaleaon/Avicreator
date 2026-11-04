@@ -25,7 +25,7 @@ impl Default for FittingConfig {
 pub struct Fitter {
     bvh: BVHTree,
     kdtree: KDTree,
-    _body_vertices: Vec<Vec3>,
+    body_vertices: Vec<Vec3>,
 }
 
 pub fn compute_centroid(points: &[Vec3]) -> Vec3 {
@@ -71,7 +71,7 @@ impl Fitter {
         Self {
             bvh,
             kdtree,
-            _body_vertices: body_vertices,
+            body_vertices,
         }
     }
 

@@ -4,11 +4,15 @@ import java.nio.ByteBuffer
 
 class NativeLib {
     companion object {
+        private var isLoaded = false
+
         init {
             try {
                 System.loadLibrary("charmorph-native")
+                isLoaded = true
             } catch (e: UnsatisfiedLinkError) {
                 // Native library not loaded in desktop unit tests
+                isLoaded = false
             }
         }
     }
@@ -39,4 +43,23 @@ class NativeLib {
         morphWeights: FloatArray,
         outputBuffer: ByteBuffer
     )
+
+    external fun parseSkeletonJsonNative(jsonStr: String): String?
+    external fun parseManifestJsonNative(jsonStr: String): String?
+
+    fun parseSkeletonJson(jsonStr: String): String? {
+        return if (isLoaded) {
+            parseSkeletonJsonNative(jsonStr)
+        } else {
+            jsonStr
+        }
+    }
+
+    fun parseManifestJson(jsonStr: String): String? {
+        return if (isLoaded) {
+            parseManifestJsonNative(jsonStr)
+        } else {
+            jsonStr
+        }
+    }
 }

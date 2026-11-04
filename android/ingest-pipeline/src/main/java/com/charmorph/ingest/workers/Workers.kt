@@ -11,7 +11,7 @@ import com.charmorph.core.model.Mesh
 import com.charmorph.core.model.Resource
 import com.charmorph.core.model.Skeleton
 import com.charmorph.ingest.AssetImporter
-import com.charmorph.ingest.GltfSkeletonStub
+import com.charmorph.ingest.NativeSkeletonLoader
 import com.charmorph.storage.CharacterRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -210,7 +210,7 @@ class MLFittingWorker @AssistedInject constructor(
         val parsedMeshFile = File(parsedMeshPath)
         if (!parsedMeshFile.exists()) return@withContext Result.failure()
 
-        val skeleton = GltfSkeletonStub.createStandardBiped()
+        val skeleton = NativeSkeletonLoader.createStandardBiped()
         val stagingDir = parsedMeshFile.parentFile ?: File(applicationContext.cacheDir, "staging")
         val fittingFile = File(stagingDir, "fitting_${UUID.randomUUID()}.json")
         fittingFile.writeText(jsonFormat.encodeToString(skeleton))
@@ -293,7 +293,7 @@ class FinalizeWorker @AssistedInject constructor(
             val skeleton = if (fittingFile != null && fittingFile.exists()) {
                 jsonFormat.decodeFromString<Skeleton>(fittingFile.readText())
             } else {
-                GltfSkeletonStub.createStandardBiped()
+                NativeSkeletonLoader.createStandardBiped()
             }
             val activeMorphs = if (slidersFile != null && slidersFile.exists()) {
                 jsonFormat.decodeFromString<Map<String, Float>>(slidersFile.readText())
