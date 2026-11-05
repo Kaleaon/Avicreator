@@ -271,6 +271,24 @@ class Asset(DataDir):
         return self.config.get("license", "")
 
     @utils.lazyproperty
+    def layer_depth(self) -> int:
+        if self.config:
+            if "layer_depth" in self.config:
+                return int(self.config["layer_depth"])
+            if "layer" in self.config:
+                return int(self.config["layer"])
+            cat = str(self.config.get("category", "")).lower()
+            if "underwear" in cat or "inner" in cat:
+                return 1
+            if "top" in cat or "bottom" in cat or "shirt" in cat or "pants" in cat or "clothing" in cat:
+                return 2
+            if "jacket" in cat or "coat" in cat or "outer" in cat or "overgarment" in cat:
+                return 3
+            if "accessory" in cat or "suit" in cat:
+                return 4
+        return 1
+
+    @utils.lazyproperty
     def mask(self):
         return self.get_np("mask.npy")
 
