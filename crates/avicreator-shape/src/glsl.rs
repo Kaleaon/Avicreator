@@ -437,6 +437,9 @@ mod tests {
         assert_eq!(meta["bones"].as_array().unwrap().len(), 4);
         let html = viewer_html(Some((&glsl, &meta)));
         assert!(html.contains("float map(vec3 p)") && !html.contains("/*__EMBED__*/"));
+        assert!(html.contains("--ktheme-bg:"), "missing --ktheme-bg token custom property");
+        assert!(html.contains("id=\"theme-select\""), "missing #theme-select element");
+        assert!(html.contains("applyKthemePreset"), "missing applyKthemePreset logic");
         assert!(html.contains(r#"canvas id="view" tabindex="0" role="img" aria-label="3D Model Viewer""#));
         assert!(html.contains(r#"aria-description="Use arrow keys or WASD to orbit"#));
         assert!(html.contains(r#"ul class="list bones" id="bones" role="listbox" aria-label="Skeleton bones""#));
