@@ -8,7 +8,7 @@ class NativeLib {
             try {
                 System.loadLibrary("charmorph-native")
             } catch (e: UnsatisfiedLinkError) {
-                // Native library not loaded in desktop unit tests
+                // Fallback for JVM host unit tests without native binary loaded
             }
         }
     }
@@ -39,4 +39,10 @@ class NativeLib {
         morphWeights: FloatArray,
         outputBuffer: ByteBuffer
     )
+
+    external fun parseSkeletonJsonNative(jsonStr: String): String
+
+    external fun parseManifestJsonNative(jsonStr: String): String
+
+    external fun extractFeaturesNative(vertices: FloatArray, normals: FloatArray): FloatArray
 }

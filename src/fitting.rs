@@ -89,7 +89,7 @@ impl Fitter {
     }
 
     pub fn body_vertices(&self) -> &[Vec3] {
-        &self._body_vertices
+        &self.body_vertices
     }
 
     pub fn add_inner_layer(&mut self, layer: GarmentLayer) {
