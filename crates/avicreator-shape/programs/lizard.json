@@ -1,17 +1,178 @@
 {
   "name": "lizard",
   "params": {
+    "muscle_mass": {"value": 1.0, "min": 0.5, "max": 1.6},
     "body_length": {"value": 0.9, "min": 0.5, "max": 1.5},
     "tail_length": {"value": 1.1, "min": 0.4, "max": 2.0},
     "tail_curl": {"value": -20, "min": -90, "max": 90},
-    "leg_length": {"value": 0.28, "min": 0.15, "max": 0.5}
+    "leg_length": {"value": 0.28, "min": 0.15, "max": 0.5},
+    "muscle_definition": {"value": 0.6, "min": 0.0, "max": 1.0}
+  },
+  "poses": {
+    "muscle_flex": {
+      "front_leg.1.L": {"bend": 35},
+      "back_leg.1.L": {"bend": -30}
+    }
   },
   "parts": [
-    {"kind": "chain", "name": "spine", "from": [0, "$leg_length+0.1", "-$body_length*0.5"], "dir": [0, 0, 1], "length": "$body_length", "segments": 3, "radius": [0.13, 0.15, 0.11]},
+    {
+      "kind": "chain",
+      "name": "spine",
+      "from": [0, "$leg_length+0.1", "-$body_length*0.5"],
+      "dir": [0, 0, 1],
+      "length": "$body_length",
+      "segments": 3,
+      "radius": [0.13, 0.15, 0.11]
+    },
     {"kind": "chain", "name": "neck", "attach": "spine", "dir": [0, 0.35, 1], "length": 0.18, "radius": [0.09, 0.075]},
     {"kind": "blob", "name": "head", "attach": "neck", "offset": [0, 0, 0.1], "axis": [0, -0.1, 1], "radii": [0.085, 0.065, 0.16]},
-    {"kind": "chain", "name": "tail", "attach": "spine.0", "at": 0, "dir": [0, -0.1, -1], "length": "$tail_length", "segments": 6, "curl": "$tail_curl", "bend_axis": [0, 1, 0], "radius": [0.11, 0.015]},
-    {"kind": "chain", "name": "front_leg", "mirror": true, "attach": "spine.2", "at": 0.5, "offset": [0.1, -0.03, 0], "points": [[0.16, -0.04, 0.02], [0.2, "-$leg_length-0.05", 0.08]], "radius": [0.05, 0.035, 0.03]},
-    {"kind": "chain", "name": "back_leg", "mirror": true, "attach": "spine.0", "at": 0.4, "offset": [0.11, -0.03, 0], "points": [[0.17, -0.04, -0.04], [0.22, "-$leg_length-0.05", 0.04]], "radius": [0.06, 0.04, 0.03]}
+    {
+      "kind": "chain",
+      "name": "tail",
+      "attach": "spine.0",
+      "at": 0,
+      "dir": [0, -0.1, -1],
+      "length": "$tail_length",
+      "segments": 6,
+      "curl": "$tail_curl",
+      "bend_axis": [0, 1, 0],
+      "radius": [0.11, 0.015]
+    },
+    {
+      "kind": "chain",
+      "name": "front_leg",
+      "mirror": true,
+      "attach": "spine.2",
+      "at": 0.5,
+      "offset": [0.1, -0.03, 0],
+      "points": [
+        [0.16, -0.04, 0.02],
+        [0.2, "-$leg_length-0.05", 0.08]
+      ],
+      "radius": [0.05, 0.035, 0.03]
+    },
+    {
+      "kind": "chain",
+      "name": "back_leg",
+      "mirror": true,
+      "attach": "spine.0",
+      "at": 0.4,
+      "offset": [0.11, -0.03, 0],
+      "points": [
+        [0.17, -0.04, -0.04],
+        [0.22, "-$leg_length-0.05", 0.04]
+      ],
+      "radius": [0.06, 0.04, 0.03]
+    },
+    {
+      "kind": "muscle",
+      "name": "epaxial",
+      "mirror": true,
+      "origin": {"attach": "spine.0", "at": 0.2, "offset": ["0.15*0.45", "0.15*0.6", 0]},
+      "insertion": {"attach": "spine.2", "at": 0.8, "offset": ["0.15*0.35", "0.15*0.5", 0]},
+      "radius": "0.15*0.3*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "neck_muscle",
+      "mirror": true,
+      "origin": {"attach": "spine.2", "at": 0.8, "offset": ["0.15*0.3", 0, 0]},
+      "insertion": {"attach": "neck", "at": 0.8, "offset": ["0.15*0.2", 0, 0]},
+      "radius": "0.15*0.25*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "front_leg_flexor",
+      "mirror": true,
+      "origin": {"attach": "front_leg.0", "at": 0.1, "offset": [0, 0, 0.0225]},
+      "insertion": {"attach": "front_leg.1", "at": 0.1, "offset": [0, 0, 0.0135]},
+      "radius": "0.045*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "front_leg_extensor",
+      "mirror": true,
+      "origin": {"attach": "front_leg.0", "at": 0.1, "offset": [0, 0, -0.0225]},
+      "insertion": {"attach": "front_leg.1", "at": 0.05, "offset": [0, 0, -0.0135]},
+      "radius": "0.036*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "front_leg_calf",
+      "mirror": true,
+      "origin": {"attach": "front_leg.1", "at": 0.15, "offset": [0, 0, -0.01575]},
+      "insertion": {"attach": "front_leg.1", "at": 0.9, "offset": [0, 0, -0.00675]},
+      "radius": "0.029249999999999998*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "back_leg_flexor",
+      "mirror": true,
+      "origin": {"attach": "back_leg.0", "at": 0.1, "offset": [0, 0, 0.0275]},
+      "insertion": {"attach": "back_leg.1", "at": 0.1, "offset": [0, 0, 0.0165]},
+      "radius": "0.055*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "back_leg_extensor",
+      "mirror": true,
+      "origin": {"attach": "back_leg.0", "at": 0.1, "offset": [0, 0, -0.0275]},
+      "insertion": {"attach": "back_leg.1", "at": 0.05, "offset": [0, 0, -0.0165]},
+      "radius": "0.044000000000000004*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "back_leg_calf",
+      "mirror": true,
+      "origin": {"attach": "back_leg.1", "at": 0.15, "offset": [0, 0, -0.01925]},
+      "insertion": {"attach": "back_leg.1", "at": 0.9, "offset": [0, 0, -0.00825]},
+      "radius": "0.035750000000000004*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_0",
+      "mirror": true,
+      "origin": {"attach": "tail.0", "at": 0.1, "offset": ["0.15*0.2", 0, 0]},
+      "insertion": {"attach": "tail.0", "at": 0.9, "offset": ["0.15*0.2", 0, 0]},
+      "radius": "0.15*0.300*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_1",
+      "mirror": true,
+      "origin": {"attach": "tail.1", "at": 0.1, "offset": ["0.15*0.2", 0, 0]},
+      "insertion": {"attach": "tail.1", "at": 0.9, "offset": ["0.15*0.2", 0, 0]},
+      "radius": "0.15*0.150*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_2",
+      "mirror": true,
+      "origin": {"attach": "tail.2", "at": 0.1, "offset": ["0.15*0.2", 0, 0]},
+      "insertion": {"attach": "tail.2", "at": 0.9, "offset": ["0.15*0.2", 0, 0]},
+      "radius": "0.15*0.100*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    }
   ]
 }

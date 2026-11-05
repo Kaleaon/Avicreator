@@ -6,7 +6,7 @@ use std::ops::Range;
 use avicreator_core::{Quat, Vec3};
 
 use crate::program::{
-    ArrayPart, ArrayShape, BlobPart, BoneSpec, ChainPart, Limits, MembranePart, Op, Part, Pivot, Profile, Radii,
+    ArrayPart, ArrayShape, BlobPart, BoneSpec, ChainPart, Limits, MembranePart, MuscleAnchor, MusclePart, Op, Part, Pivot, Profile, Radii,
     Resolver, Rotation, Scalar, ScopePart, Settings, ShapeProgram, SkeletonTarget, V3,
 };
 use crate::sdf::{Aabb, Shape};
@@ -55,6 +55,8 @@ pub enum Influence {
     Chain { bones: Vec<usize>, joints: Vec<Vec3> },
     /// Everything follows one bone.
     Rigid { bone: usize },
+    /// Smooth endpoint-to-endpoint skinning along a muscle's line of action.
+    Muscle { bones: [usize; 2], a: Vec3, b: Vec3 },
     /// The two nearest bones by distance to their segments (membranes).
     Nearest { bones: Vec<usize> },
     /// Each primitive follows its own bone (arrays of spikes, plates).
@@ -118,6 +120,8 @@ pub struct CompiledShape {
     pub groups: Vec<Group>,
     /// Bounds of the union geometry, padded by blend radii.
     pub bounds: Aabb,
+    /// Optional field interpolation for forms with different topology.
+    pub transition: Option<Box<crate::shapeshift::Transition>>,
 }
 
 impl CompiledShape {
@@ -232,6 +236,8 @@ struct Compiler<'a> {
     links: Vec<(Vec<usize>, bool)>,
     /// Local rotations of the active pose, by bone name.
     pose: HashMap<String, Quat>,
+    /// Endpoint spans in the authored rest pose, with the same parameter values.
+    muscle_rest_lengths: HashMap<String, f32>,
 }
 
 pub fn compile(program: &ShapeProgram) -> Result<CompiledShape, ShapeError> {
@@ -259,6 +265,7 @@ pub fn compile(program: &ShapeProgram) -> Result<CompiledShape, ShapeError> {
         chains: HashMap::new(),
         links: Vec::new(),
         pose: HashMap::new(),
+        muscle_rest_lengths: HashMap::new(),
     };
     if let Some(name) = &program.pose {
         let spec = program.poses.get(name).ok_or_else(|| {
@@ -269,6 +276,14 @@ pub fn compile(program: &ShapeProgram) -> Result<CompiledShape, ShapeError> {
             ))
         })?;
         c.pose = resolve_pose(spec, &c.res).map_err(ShapeError::Program)?;
+        let mut rest_program = program.clone();
+        rest_program.pose = None;
+        let rest = compile(&rest_program)?;
+        for part in &rest.parts {
+            if let Influence::Muscle { a, b, .. } = &part.influence {
+                c.muscle_rest_lengths.insert(part.name.clone(), b.sub(*a).length());
+            }
+        }
     }
 
     let mut counter = 0;
@@ -307,6 +322,7 @@ pub fn compile(program: &ShapeProgram) -> Result<CompiledShape, ShapeError> {
         bones: c.bones,
         groups,
         bounds,
+        transition: None,
     };
     if shape.skeleton == SkeletonTarget::SecondLife {
         crate::sl::validate(&shape).map_err(ShapeError::Program)?;
@@ -417,6 +433,7 @@ impl<'a> Compiler<'a> {
                     Part::Chain(p) => self.chain(p, m, color),
                     Part::Blob(p) => self.blob(p, m, color),
                     Part::Membrane(p) => self.membrane(p, m, color),
+                    Part::Muscle(p) => self.muscle(p, m, color),
                     Part::Array(p) => self.array(p, m, color),
                     Part::Scope(ScopePart { scale, parts, .. }) => {
                         let s = match scale {
@@ -851,6 +868,50 @@ impl<'a> Compiler<'a> {
         let own = owns_bone && (p.separate.unwrap_or(false) || attached.is_empty());
         let links = if p.global { Vec::new() } else { attached };
         self.finish_part(index, &p.name, m, "blob", p.op, blend, 0.0, prim_start, influence, p.color.unwrap_or(default_color), (links, own))
+    }
+
+    fn muscle_anchor(&self, p: &MuscleAnchor, m: Mirror) -> Result<(Vec3, usize), String> {
+        let at = self.opt_scalar(&p.at, 0.5)?;
+        if !(0.0..=1.0).contains(&at) {
+            return Err("at must lie within 0..1".into());
+        }
+        let (point, _, bone) = self.anchor(&None, &Some(p.attach.clone()), &Some(Scalar::Num(at)), &p.offset, m)?;
+        let b = bone.expect("attached muscle endpoint has a bone");
+        Ok((point, b))
+    }
+
+    fn muscle(&mut self, p: &MusclePart, m: Mirror, default_color: [f32; 3]) -> Result<(), String> {
+        let (a, origin) = self.muscle_anchor(&p.origin, m).map_err(|e| format!("origin: {}", e))?;
+        let (b, insertion) = self.muscle_anchor(&p.insertion, m).map_err(|e| format!("insertion: {}", e))?;
+        let length = b.sub(a).length();
+        if !length.is_finite() || length <= 1e-5 {
+            return Err("origin and insertion must be at least 0.00001 units apart".into());
+        }
+        let radius = positive(self.len(&p.radius, m)?, "radius")?;
+        let tendon = self.opt_scalar(&p.tendon, 0.2)?;
+        if !(0.0 < tendon && tendon <= 1.0) {
+            return Err("tendon must lie within (0, 1]".into());
+        }
+        let full_name = format!("{}{}", p.name, m.suffix);
+        let rest_length = self.muscle_rest_lengths.get(&full_name).copied().unwrap_or(length);
+        // Preserve the swept profile's approximate volume as the attachments
+        // move; bound extreme contractions to avoid unbounded bulges.
+        let radial_scale = if p.preserve_volume { (rest_length / length).sqrt().clamp(0.5, 2.0) } else { 1.0 };
+        let radius = positive(radius * radial_scale, "posed radius")?;
+        let index = self.begin_part(p.name.clone(), m)?;
+        let prim_start = self.prims.len();
+        let profile = |t: f32| radius * (tendon + (1.0 - tendon) * (std::f32::consts::PI * t).sin().max(0.0));
+        const SEGMENTS: usize = 12;
+        for i in 0..SEGMENTS {
+            let t0 = i as f32 / SEGMENTS as f32;
+            let t1 = (i + 1) as f32 / SEGMENTS as f32;
+            self.push_prim(Shape::RoundCone { a: a.lerp(b, t0), b: a.lerp(b, t1), ra: profile(t0), rb: profile(t1) }, index, None);
+        }
+        let mut links = vec![self.bones[origin].part];
+        if !links.contains(&self.bones[insertion].part) { links.push(self.bones[insertion].part); }
+        let blend = self.blend(&p.blend, self.settings.blend * 0.5, m)?;
+        self.finish_part(index, &p.name, m, "muscle", Op::Union, blend, 0.0, prim_start,
+            Influence::Muscle { bones: [origin, insertion], a, b }, p.color.unwrap_or(default_color), (links, true))
     }
 
     fn membrane(&mut self, p: &MembranePart, m: Mirror, default_color: [f32; 3]) -> Result<(), String> {
