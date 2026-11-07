@@ -4,14 +4,22 @@ import java.nio.ByteBuffer
 
 class NativeLib {
     companion object {
+        private var isLoaded = false
+
         init {
             try {
                 System.loadLibrary("charmorph-native")
+                isLoaded = true
             } catch (e: UnsatisfiedLinkError) {
-                // Fallback for JVM host unit tests without native binary loaded
+                // Native library not loaded in desktop unit tests
+                isLoaded = false
             }
         }
+
+        fun isLoaded(): Boolean = isLoaded
     }
+
+    fun isLoaded(): Boolean = Companion.isLoaded()
 
     external fun stringFromJNI(): String
 
@@ -40,9 +48,25 @@ class NativeLib {
         outputBuffer: ByteBuffer
     )
 
-    external fun parseSkeletonJsonNative(jsonStr: String): String
+    external fun parseSkeletonJsonNative(jsonStr: String): String?
 
-    external fun parseManifestJsonNative(jsonStr: String): String
+    external fun parseManifestJsonNative(jsonStr: String): String?
+
+    fun parseSkeletonJson(jsonStr: String): String? {
+        return if (isLoaded) {
+            parseSkeletonJsonNative(jsonStr)
+        } else {
+            jsonStr
+        }
+    }
+
+    fun parseManifestJson(jsonStr: String): String? {
+        return if (isLoaded) {
+            parseManifestJsonNative(jsonStr)
+        } else {
+            jsonStr
+        }
+    }
 
     external fun extractFeaturesNative(vertices: FloatArray, normals: FloatArray): FloatArray
 }

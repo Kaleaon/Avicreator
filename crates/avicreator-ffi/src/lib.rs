@@ -1,7 +1,7 @@
 use avicreator_core::{
     normalize_vertex_weights, Mesh, MorphDelta, MorphEvaluator, MorphTarget, Vec3,
 };
-use avicreator_schema::AssetManifest;
+use avicreator_schema::{AssetManifest, Skeleton};
 use std::collections::HashMap;
 use std::ffi::{c_char, CStr, CString};
 
@@ -320,6 +320,74 @@ pub unsafe extern "C" fn avicreator_normalize_weights(
     0
 }
 
+/// Parses skeleton JSON string and returns canonical JSON representation string.
+/// The returned string pointer must be deallocated using `avicreator_free_string`.
+/// Returns null pointer if parsing fails or input is invalid.
+#[no_mangle]
+pub unsafe extern "C" fn avicreator_parse_skeleton_json(json_str: *const c_char) -> *mut c_char {
+    if json_str.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let c_str = CStr::from_ptr(json_str);
+    let s = match c_str.to_str() {
+        Ok(val) => val,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    match Skeleton::from_json(s) {
+        Ok(skel) => match skel.to_json() {
+            Ok(json) => CString::new(json).map_or(std::ptr::null_mut(), |c| c.into_raw()),
+            Err(_) => std::ptr::null_mut(),
+        },
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Parses asset manifest JSON string and returns canonical JSON representation string.
+/// The returned string pointer must be deallocated using `avicreator_free_string`.
+/// Returns null pointer if parsing fails or input is invalid.
+#[no_mangle]
+pub unsafe extern "C" fn avicreator_parse_manifest_json(json_str: *const c_char) -> *mut c_char {
+    if json_str.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let c_str = CStr::from_ptr(json_str);
+    let s = match c_str.to_str() {
+        Ok(val) => val,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    match AssetManifest::from_json(s) {
+        Ok(manifest) => match manifest.to_json() {
+            Ok(json) => CString::new(json).map_or(std::ptr::null_mut(), |c| c.into_raw()),
+            Err(_) => std::ptr::null_mut(),
+        },
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Validates skeleton JSON. Returns 1 if valid, 0 if invalid.
+#[no_mangle]
+pub unsafe extern "C" fn avicreator_validate_skeleton_json(json_str: *const c_char) -> i32 {
+    if json_str.is_null() {
+        return 0;
+    }
+
+    let c_str = CStr::from_ptr(json_str);
+    let s = match c_str.to_str() {
+        Ok(val) => val,
+        Err(_) => return 0,
+    };
+
+    if Skeleton::from_json(s).is_ok() {
+        1
+    } else {
+        0
+    }
+}
+
 /// Validates manifest JSON. Returns 1 if valid, 0 if invalid.
 #[no_mangle]
 pub unsafe extern "C" fn avicreator_validate_manifest_json(json_str: *const c_char) -> i32 {
@@ -410,6 +478,35 @@ mod tests {
             avicreator_free_string(ver);
 
             avicreator_engine_destroy(engine);
+        }
+    }
+
+    #[test]
+    fn test_c_ffi_json_parsing() {
+        unsafe {
+            // Skeleton test
+            let skel_raw = r#"{"name": "Biped", "nodes": [{"id": 0, "name": "Hips", "translation": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}], "root_indices": [0]}"#;
+            let c_skel = CString::new(skel_raw).unwrap();
+            assert_eq!(avicreator_validate_skeleton_json(c_skel.as_ptr()), 1);
+
+            let parsed_skel_ptr = avicreator_parse_skeleton_json(c_skel.as_ptr());
+            assert!(!parsed_skel_ptr.is_null());
+            let parsed_skel_str = CStr::from_ptr(parsed_skel_ptr).to_str().unwrap();
+            assert!(parsed_skel_str.contains("Biped"));
+            assert!(parsed_skel_str.contains("Hips"));
+            avicreator_free_string(parsed_skel_ptr);
+
+            // Manifest test
+            let manifest_raw = r#"{"id": "c1", "name": "Char", "version": "1.0", "category": "character", "skeleton_type": "biped"}"#;
+            let c_manifest = CString::new(manifest_raw).unwrap();
+            assert_eq!(avicreator_validate_manifest_json(c_manifest.as_ptr()), 1);
+
+            let parsed_man_ptr = avicreator_parse_manifest_json(c_manifest.as_ptr());
+            assert!(!parsed_man_ptr.is_null());
+            let parsed_man_str = CStr::from_ptr(parsed_man_ptr).to_str().unwrap();
+            assert!(parsed_man_str.contains("Char"));
+            assert!(parsed_man_str.contains("biped"));
+            avicreator_free_string(parsed_man_ptr);
         }
     }
 }

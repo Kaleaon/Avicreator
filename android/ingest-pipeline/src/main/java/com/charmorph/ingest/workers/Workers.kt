@@ -12,7 +12,6 @@ import com.charmorph.core.model.Resource
 import com.charmorph.core.model.Skeleton
 import com.charmorph.ingest.AssetImporter
 import com.charmorph.ingest.DefaultAssetImporter
-import com.charmorph.ingest.GltfSkeletonStub
 import com.charmorph.ingest.NativeSkeletonLoader
 import com.charmorph.ingest.ObjParser
 import com.charmorph.nativebridge.NativeLib
@@ -415,10 +414,10 @@ class MLFittingWorker @AssistedInject constructor(
             try {
                 jsonFormat.decodeFromString<Skeleton>(File(skeletonPath).readText())
             } catch (_: Exception) {
-                GltfSkeletonStub.createStandardBiped()
+                NativeSkeletonLoader.createStandardBiped()
             }
         } else {
-            GltfSkeletonStub.createStandardBiped()
+            NativeSkeletonLoader.createStandardBiped()
         }
 
         val fittingFile = File(stagingDir, "fitting_${UUID.randomUUID()}.json")
@@ -565,16 +564,16 @@ class FinalizeWorker @AssistedInject constructor(
                 try {
                     jsonFormat.decodeFromString<Skeleton>(skeletonFile.readText())
                 } catch (_: Exception) {
-                    GltfSkeletonStub.createStandardBiped()
+                    NativeSkeletonLoader.createStandardBiped()
                 }
             } else if (fittingFile != null && fittingFile.exists()) {
                 try {
                     jsonFormat.decodeFromString<Skeleton>(fittingFile.readText())
                 } catch (_: Exception) {
-                    GltfSkeletonStub.createStandardBiped()
+                    NativeSkeletonLoader.createStandardBiped()
                 }
             } else {
-                GltfSkeletonStub.createStandardBiped()
+                NativeSkeletonLoader.createStandardBiped()
             }
 
             val activeMorphs = if (fittedWeightsFile != null && fittedWeightsFile.exists()) {
