@@ -15,7 +15,11 @@ class NativeLib {
                 isLoaded = false
             }
         }
+
+        fun isLoaded(): Boolean = isLoaded
     }
+
+    fun isLoaded(): Boolean = Companion.isLoaded()
 
     external fun stringFromJNI(): String
 
@@ -45,6 +49,7 @@ class NativeLib {
     )
 
     external fun parseSkeletonJsonNative(jsonStr: String): String?
+
     external fun parseManifestJsonNative(jsonStr: String): String?
 
     fun parseSkeletonJson(jsonStr: String): String? {
@@ -62,4 +67,6 @@ class NativeLib {
             jsonStr
         }
     }
+
+    external fun extractFeaturesNative(vertices: FloatArray, normals: FloatArray): FloatArray
 }

@@ -328,3 +328,60 @@ Java_com_charmorph_nativebridge_NativeLib_parseManifestJsonNative(
     avicreator_free_string(parsed);
     return result;
 }
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_charmorph_nativebridge_NativeLib_extractFeaturesNative(
+        JNIEnv* env,
+        jobject /* this */,
+        jfloatArray vertices,
+        jfloatArray normals) {
+    if (vertices == nullptr) {
+        jfloatArray empty = env->NewFloatArray(0);
+        return empty;
+    }
+
+    jsize vertLen = env->GetArrayLength(vertices);
+    if (vertLen == 0 || vertLen % 3 != 0) {
+        jfloatArray empty = env->NewFloatArray(0);
+        return empty;
+    }
+
+    jfloat* vertData = env->GetFloatArrayElements(vertices, 0);
+    float minX = 1e9f, minY = 1e9f, minZ = 1e9f;
+    float maxX = -1e9f, maxY = -1e9f, maxZ = -1e9f;
+    float sumX = 0.0f, sumY = 0.0f, sumZ = 0.0f;
+    int vertexCount = vertLen / 3;
+
+    for (int i = 0; i < vertLen; i += 3) {
+        float x = vertData[i];
+        float y = vertData[i + 1];
+        float z = vertData[i + 2];
+
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
+
+        sumX += x;
+        sumY += y;
+        sumZ += z;
+    }
+    env->ReleaseFloatArrayElements(vertices, vertData, 0);
+
+    float features[9] = {
+        static_cast<float>(vertexCount),
+        minX, maxX,
+        minY, maxY,
+        minZ, maxZ,
+        sumX / vertexCount,
+        sumY / vertexCount
+    };
+
+    jfloatArray result = env->NewFloatArray(9);
+    if (result != nullptr) {
+        env->SetFloatArrayRegion(result, 0, 9, features);
+    }
+    return result;
+}

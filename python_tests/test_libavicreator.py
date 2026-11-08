@@ -116,6 +116,72 @@ def test_fitter_and_rigger():
     assert isinstance(skinned, np.ndarray)
     assert skinned.shape == (1, 3)
 
+def test_multi_layer_fitter():
+    """Verify PyFitter multi-layer collision stack calculation in native rust wrapper."""
+    body_verts = [
+        [-1.0, -1.0, 0.0],
+        [ 1.0, -1.0, 0.0],
+        [ 1.0,  1.0, 0.0],
+        [-1.0,  1.0, 0.0],
+    ]
+    body_polys = [[0, 1, 2], [0, 2, 3]]
+    fitter = libavicreator.Fitter(body_verts, body_polys)
+
+    # Inner shirt layer at Z = 0.20
+    shirt_verts = [
+        [-1.0, -1.0, 0.20],
+        [ 1.0, -1.0, 0.20],
+        [ 1.0,  1.0, 0.20],
+        [-1.0,  1.0, 0.20],
+    ]
+    shirt_polys = [[0, 1, 2], [0, 2, 3]]
+    fitter.add_inner_layer(1, shirt_verts, shirt_polys)
+
+    # Outer jacket asset at Z = 0.10 penetrating inner shirt
+    jacket_verts = [[0.0, 0.0, 0.10]]
+    fitted = fitter.fit_asset_layer(jacket_verts, 2, max_distance=0.5, smoothing_iterations=1, min_clearance=0.005)
+
+    assert isinstance(fitted, np.ndarray)
+    assert fitted.shape == (1, 3)
+    # Jacket vertex must clear the inner shirt (Z >= 0.20 + 0.005)
+    assert fitted[0, 2] >= 0.205 - 1e-4
+
+
+def test_laplacian_relaxation_and_volumetric_metrics():
+    """Verify PyMorpher Cotangent Laplacian relaxation configuration and volumetric metric API."""
+    vertices = [
+        [-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [1.0, 1.0, -1.0], [-1.0, 1.0, -1.0],
+        [-1.0, -1.0, 1.0], [1.0, -1.0, 1.0], [1.0, 1.0, 1.0], [-1.0, 1.0, 1.0],
+    ]
+    polygons = [
+        [0, 1, 2], [0, 2, 3],
+        [5, 4, 7], [5, 7, 6],
+        [4, 0, 3], [4, 3, 7],
+        [1, 5, 6], [1, 6, 2],
+        [4, 5, 1], [4, 1, 0],
+        [3, 2, 6], [3, 6, 7],
+    ]
+
+    morpher = libavicreator.Morpher(vertices, polygons)
+    morpher.set_relaxation_enabled(True)
+    morpher.set_relaxation_factor(0.5)
+    morpher.set_max_iterations(5)
+    morpher.set_convergence_threshold(1e-4)
+
+    evaluated = morpher.evaluate()
+    assert isinstance(evaluated, np.ndarray)
+    assert evaluated.shape == (8, 3)
+
+    vol = morpher.get_volume(None)
+    center = morpher.get_volumetric_center(None)
+    normals = morpher.get_surface_normals(None)
+
+    assert abs(vol - 8.0) < 1e-2
+    np.testing.assert_allclose(center, [0.0, 0.0, 0.0], atol=1e-2)
+    assert isinstance(normals, np.ndarray)
+    assert normals.shape == (8, 3)
+
+
 def test_asset_manifest_and_skeleton_schema():
     """Verify AssetManifest and Skeleton PyO3 bindings and JSON roundtrip."""
     manifest = libavicreator.AssetManifest(
@@ -162,6 +228,7 @@ def test_asset_manifest_and_skeleton_schema():
     assert parsed_skel.node_count == skel.node_count
     assert parsed_skel.root_indices == skel.root_indices
 
+
 def test_json_base_mesh_loading(tmp_path):
     """Verify loading base mesh from JSON format alongside XML fallback."""
     from lib.xml_base_mesh import load_base_mesh, load_dir
@@ -191,67 +258,3 @@ def test_json_base_mesh_loading(tmp_path):
 
     loaded_dir = load_dir(str(tmp_path))
     assert "JsonHero" in loaded_dir
-
-def test_multi_layer_fitter():
-    """Verify PyFitter multi-layer collision stack calculation in native rust wrapper."""
-    body_verts = [
-        [-1.0, -1.0, 0.0],
-        [ 1.0, -1.0, 0.0],
-        [ 1.0,  1.0, 0.0],
-        [-1.0,  1.0, 0.0],
-    ]
-    body_polys = [[0, 1, 2], [0, 2, 3]]
-    fitter = libavicreator.Fitter(body_verts, body_polys)
-
-    # Inner shirt layer at Z = 0.20
-    shirt_verts = [
-        [-1.0, -1.0, 0.20],
-        [ 1.0, -1.0, 0.20],
-        [ 1.0,  1.0, 0.20],
-        [-1.0,  1.0, 0.20],
-    ]
-    shirt_polys = [[0, 1, 2], [0, 2, 3]]
-    fitter.add_inner_layer(1, shirt_verts, shirt_polys)
-
-    # Outer jacket asset at Z = 0.10 penetrating inner shirt
-    jacket_verts = [[0.0, 0.0, 0.10]]
-    fitted = fitter.fit_asset_layer(jacket_verts, 2, max_distance=0.5, smoothing_iterations=1, min_clearance=0.005)
-
-    assert isinstance(fitted, np.ndarray)
-    assert fitted.shape == (1, 3)
-    # Jacket vertex must clear the inner shirt (Z >= 0.20 + 0.005)
-    assert fitted[0, 2] >= 0.205 - 1e-4
-
-def test_laplacian_relaxation_and_volumetric_metrics():
-    """Verify PyMorpher Cotangent Laplacian relaxation configuration and volumetric metric API."""
-    vertices = [
-        [-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [1.0, 1.0, -1.0], [-1.0, 1.0, -1.0],
-        [-1.0, -1.0, 1.0], [1.0, -1.0, 1.0], [1.0, 1.0, 1.0], [-1.0, 1.0, 1.0],
-    ]
-    polygons = [
-        [0, 1, 2], [0, 2, 3],
-        [5, 4, 7], [5, 7, 6],
-        [4, 0, 3], [4, 3, 7],
-        [1, 5, 6], [1, 6, 2],
-        [4, 5, 1], [4, 1, 0],
-        [3, 2, 6], [3, 6, 7],
-    ]
-
-    morpher = libavicreator.Morpher(vertices, polygons)
-    morpher.set_relaxation_enabled(True)
-    morpher.set_relaxation_factor(0.5)
-    morpher.set_max_iterations(5)
-    morpher.set_convergence_threshold(1e-4)
-
-    evaluated = morpher.evaluate()
-    assert isinstance(evaluated, np.ndarray)
-    assert evaluated.shape == (8, 3)
-
-    vol = morpher.get_volume(None)
-    center = morpher.get_volumetric_center(None)
-    normals = morpher.get_surface_normals(None)
-
-    assert abs(vol - 8.0) < 1e-2
-    np.testing.assert_allclose(center, [0.0, 0.0, 0.0], atol=1e-2)
-    assert isinstance(normals, np.ndarray)
-    assert normals.shape == (8, 3)
