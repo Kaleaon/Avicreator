@@ -5,7 +5,12 @@ import com.charmorph.core.model.Skeleton
 import com.charmorph.core.model.Vector3
 import com.charmorph.core.model.Vector4
 import com.charmorph.nativebridge.NativeLib
-import org.json.JSONArray
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.float
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.json.JSONObject
 
 class NativeSkeletonLoader(
@@ -13,16 +18,16 @@ class NativeSkeletonLoader(
 ) {
     fun loadSkeletonFromJson(jsonStr: String?): Skeleton {
         if (jsonStr.isNullOrEmpty()) {
-            return GltfSkeletonStub.createStandardBiped()
+            return createStandardBiped()
         }
 
         val textToParse = try {
-            nativeLib.parseSkeletonJsonNative(jsonStr)
-        } catch (e: Throwable) {
+            nativeLib.parseSkeletonJson(jsonStr) ?: jsonStr
+        } catch (_: Throwable) {
             jsonStr
         }
 
-        return parseSkeletonJsonString(textToParse)
+        return parseCanonicalSkeletonJson(textToParse)
     }
 
     fun parseManifestJson(jsonStr: String?): Map<String, String> {
@@ -31,8 +36,8 @@ class NativeSkeletonLoader(
         }
 
         val textToParse = try {
-            nativeLib.parseManifestJsonNative(jsonStr)
-        } catch (e: Throwable) {
+            nativeLib.parseManifestJson(jsonStr) ?: jsonStr
+        } catch (_: Throwable) {
             jsonStr
         }
 
@@ -43,62 +48,125 @@ class NativeSkeletonLoader(
                 resultMap[key] = jsonObject.optString(key, "")
             }
             resultMap
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
             emptyMap()
         }
     }
 
-    private fun parseSkeletonJsonString(jsonStr: String): Skeleton {
-        return try {
-            val jsonObject = JSONObject(jsonStr)
-            val bonesArray = jsonObject.optJSONArray("bones") ?: JSONArray()
-            val boneList = mutableListOf<Bone>()
+    companion object {
+        private val json = Json { ignoreUnknownKeys = true }
 
-            for (i in 0 until bonesArray.length()) {
-                val bObj = bonesArray.getJSONObject(i)
-                val id = bObj.optInt("id", i)
-                val name = bObj.optString("name", "Bone_$id")
-                val parentId = bObj.optInt("parent_id", -1)
+        /**
+         * Loads a Skeleton object from a JSON string using JNI/FFI native validation & parsing.
+         */
+        fun loadFromJson(jsonStr: String): Skeleton {
+            val nativeLib = NativeLib()
+            val parsedJson = nativeLib.parseSkeletonJson(jsonStr) ?: jsonStr
+            return parseCanonicalSkeletonJson(parsedJson)
+        }
 
-                val posArray = bObj.optJSONArray("position")
-                val position = if (posArray != null && posArray.length() >= 3) {
-                    Vector3(
-                        posArray.getDouble(0).toFloat(),
-                        posArray.getDouble(1).toFloat(),
-                        posArray.getDouble(2).toFloat()
-                    )
-                } else Vector3(0f, 0f, 0f)
+        /**
+         * Parses standard avicreator-schema Skeleton JSON string into a Kotlin Skeleton domain object.
+         */
+        fun parseCanonicalSkeletonJson(canonicalJson: String): Skeleton {
+            return try {
+                val rootObj = json.parseToJsonElement(canonicalJson).jsonObject
+                val nodesArray = rootObj["nodes"]?.jsonArray
+                if (nodesArray != null) {
+                    val bones = nodesArray.map { nodeElement ->
+                        val nodeObj = nodeElement.jsonObject
+                        val id = runCatching { nodeObj["id"]?.jsonPrimitive?.int }.getOrNull() ?: 0
+                        val name = runCatching { nodeObj["name"]?.jsonPrimitive?.content }.getOrNull() ?: "Bone_$id"
+                        val parentId = runCatching { nodeObj["parent_id"]?.jsonPrimitive?.int }.getOrNull() ?: -1
 
-                val rotArray = bObj.optJSONArray("rotation")
-                val rotation = if (rotArray != null && rotArray.length() >= 4) {
-                    Vector4(
-                        rotArray.getDouble(0).toFloat(),
-                        rotArray.getDouble(1).toFloat(),
-                        rotArray.getDouble(2).toFloat(),
-                        rotArray.getDouble(3).toFloat()
-                    )
-                } else Vector4(0f, 0f, 0f, 1f)
+                        val transArr = nodeObj["translation"]?.jsonArray
+                        val posX = transArr?.get(0)?.jsonPrimitive?.float ?: 0f
+                        val posY = transArr?.get(1)?.jsonPrimitive?.float ?: 0f
+                        val posZ = transArr?.get(2)?.jsonPrimitive?.float ?: 0f
 
-                val scaleArray = bObj.optJSONArray("scale")
-                val scale = if (scaleArray != null && scaleArray.length() >= 3) {
-                    Vector3(
-                        scaleArray.getDouble(0).toFloat(),
-                        scaleArray.getDouble(1).toFloat(),
-                        scaleArray.getDouble(2).toFloat()
-                    )
-                } else Vector3(1f, 1f, 1f)
+                        val rotArr = nodeObj["rotation"]?.jsonArray
+                        val rotX = rotArr?.get(0)?.jsonPrimitive?.float ?: 0f
+                        val rotY = rotArr?.get(1)?.jsonPrimitive?.float ?: 0f
+                        val rotZ = rotArr?.get(2)?.jsonPrimitive?.float ?: 0f
+                        val rotW = rotArr?.get(3)?.jsonPrimitive?.float ?: 1f
 
-                boneList.add(Bone(id, name, parentId, position, rotation, scale))
+                        val scaleArr = nodeObj["scale"]?.jsonArray
+                        val scaleX = scaleArr?.get(0)?.jsonPrimitive?.float ?: 1f
+                        val scaleY = scaleArr?.get(1)?.jsonPrimitive?.float ?: 1f
+                        val scaleZ = scaleArr?.get(2)?.jsonPrimitive?.float ?: 1f
+
+                        Bone(
+                            id = id,
+                            name = name,
+                            parentId = parentId,
+                            localPosition = Vector3(posX, posY, posZ),
+                            localRotation = Vector4(rotX, rotY, rotZ, rotW),
+                            localScale = Vector3(scaleX, scaleY, scaleZ)
+                        )
+                    }
+                    if (bones.isEmpty()) createStandardBiped() else Skeleton(bones)
+                } else {
+                    // Fallback to legacy "bones" array if present
+                    val bonesArray = rootObj["bones"]?.jsonArray
+                    if (bonesArray != null) {
+                        val bones = bonesArray.map { boneElement ->
+                            val bObj = boneElement.jsonObject
+                            val id = runCatching { bObj["id"]?.jsonPrimitive?.int }.getOrNull() ?: 0
+                            val name = runCatching { bObj["name"]?.jsonPrimitive?.content }.getOrNull() ?: "Bone_$id"
+                            val parentId = runCatching { bObj["parent_id"]?.jsonPrimitive?.int }.getOrNull() ?: -1
+
+                            val posArr = bObj["position"]?.jsonArray
+                            val posX = posArr?.get(0)?.jsonPrimitive?.float ?: 0f
+                            val posY = posArr?.get(1)?.jsonPrimitive?.float ?: 0f
+                            val posZ = posArr?.get(2)?.jsonPrimitive?.float ?: 0f
+
+                            val rotArr = bObj["rotation"]?.jsonArray
+                            val rotX = rotArr?.get(0)?.jsonPrimitive?.float ?: 0f
+                            val rotY = rotArr?.get(1)?.jsonPrimitive?.float ?: 0f
+                            val rotZ = rotArr?.get(2)?.jsonPrimitive?.float ?: 0f
+                            val rotW = rotArr?.get(3)?.jsonPrimitive?.float ?: 1f
+
+                            val scaleArr = bObj["scale"]?.jsonArray
+                            val scaleX = scaleArr?.get(0)?.jsonPrimitive?.float ?: 1f
+                            val scaleY = scaleArr?.get(1)?.jsonPrimitive?.float ?: 1f
+                            val scaleZ = scaleArr?.get(2)?.jsonPrimitive?.float ?: 1f
+
+                            Bone(
+                                id = id,
+                                name = name,
+                                parentId = parentId,
+                                localPosition = Vector3(posX, posY, posZ),
+                                localRotation = Vector4(rotX, rotY, rotZ, rotW),
+                                localScale = Vector3(scaleX, scaleY, scaleZ)
+                            )
+                        }
+                        if (bones.isEmpty()) createStandardBiped() else Skeleton(bones)
+                    } else {
+                        createStandardBiped()
+                    }
+                }
+            } catch (_: Throwable) {
+                createStandardBiped()
             }
+        }
 
-            if (boneList.isEmpty()) {
-                GltfSkeletonStub.createStandardBiped()
-            } else {
-                Skeleton(boneList)
+        /**
+         * Replaces standard biped stub with native schema deserialization.
+         */
+        fun createStandardBiped(): Skeleton {
+            val defaultBipedJson = """
+            {
+                "name": "StandardBiped",
+                "nodes": [
+                    {"id": 0, "name": "Root", "parent_id": null, "translation": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]},
+                    {"id": 1, "name": "Pelvis", "parent_id": 0, "translation": [0.0, 1.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]},
+                    {"id": 2, "name": "Spine", "parent_id": 1, "translation": [0.0, 0.2, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]},
+                    {"id": 3, "name": "Head", "parent_id": 2, "translation": [0.0, 0.4, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}
+                ],
+                "root_indices": [0]
             }
-        } catch (e: Throwable) {
-            e.printStackTrace()
-            GltfSkeletonStub.createStandardBiped()
+            """.trimIndent()
+            return loadFromJson(defaultBipedJson)
         }
     }
 }
