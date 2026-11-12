@@ -244,6 +244,42 @@ pub struct MembranePart {
     pub color: Option<[f32; 3]>,
 }
 
+/// A muscle endpoint on an existing bone. Offsets use authored world axes,
+/// like chain/blob offsets, and rotate with the bone in a named pose.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MuscleAnchor {
+    pub attach: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<Scalar>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset: Option<V3>,
+}
+
+fn default_preserve_volume() -> bool { true }
+
+/// A tapered belly between two rig attachments; creates no extra bones.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MusclePart {
+    pub name: String,
+    #[serde(default)]
+    pub mirror: bool,
+    pub origin: MuscleAnchor,
+    pub insertion: MuscleAnchor,
+    /// Maximum rest-pose belly radius, scaled by enclosing scopes.
+    pub radius: Scalar,
+    /// Endpoint radius as a fraction of the belly radius (default 0.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tendon: Option<Scalar>,
+    #[serde(default = "default_preserve_volume")]
+    pub preserve_volume: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blend: Option<Scalar>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[f32; 3]>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ArrayShape {
@@ -312,6 +348,7 @@ pub enum Part {
     Chain(ChainPart),
     Blob(BlobPart),
     Membrane(MembranePart),
+    Muscle(MusclePart),
     Array(ArrayPart),
     Scope(ScopePart),
 }
@@ -322,6 +359,7 @@ impl Part {
             Part::Chain(p) => &p.name,
             Part::Blob(p) => &p.name,
             Part::Membrane(p) => &p.name,
+            Part::Muscle(p) => &p.name,
             Part::Array(p) => &p.name,
             Part::Scope(p) => &p.name,
         }
@@ -332,6 +370,7 @@ impl Part {
             Part::Chain(p) => p.mirror,
             Part::Blob(p) => p.mirror,
             Part::Membrane(p) => p.mirror,
+            Part::Muscle(p) => p.mirror,
             Part::Array(p) => p.mirror,
             Part::Scope(p) => p.mirror,
         }
@@ -342,6 +381,7 @@ impl Part {
             Part::Chain(_) => "chain",
             Part::Blob(_) => "blob",
             Part::Membrane(_) => "membrane",
+            Part::Muscle(_) => "muscle",
             Part::Array(_) => "array",
             Part::Scope(_) => "scope",
         }
@@ -361,7 +401,7 @@ impl Part {
             Some(Value::String(k)) => k,
             _ => {
                 return Err(ShapeError::Program(format!(
-                    "{}: missing \"kind\" (one of chain, blob, membrane, array, scope)",
+                    "{}: missing \"kind\" (one of chain, blob, muscle, membrane, array, scope)",
                     label
                 )))
             }
@@ -372,6 +412,7 @@ impl Part {
             "chain" => Part::Chain(serde_json::from_value(rest).map_err(wrap)?),
             "blob" => Part::Blob(serde_json::from_value(rest).map_err(wrap)?),
             "membrane" => Part::Membrane(serde_json::from_value(rest).map_err(wrap)?),
+            "muscle" => Part::Muscle(serde_json::from_value(rest).map_err(wrap)?),
             "array" => Part::Array(serde_json::from_value(rest).map_err(wrap)?),
             "scope" => {
                 let raw: RawScope = serde_json::from_value(rest).map_err(wrap)?;
@@ -385,7 +426,7 @@ impl Part {
             }
             other => {
                 return Err(ShapeError::Program(format!(
-                    "{}: unknown kind '{}' (expected chain, blob, membrane, array or scope)",
+                    "{}: unknown kind '{}' (expected chain, blob, muscle, membrane, array or scope)",
                     label, other
                 )))
             }

@@ -12,7 +12,9 @@
     "muzzle_length": {"value": 0.085, "min": 0.04, "max": 0.14},
     "ear_length": {"value": 0.1, "min": 0.05, "max": 0.17},
     "tail_length": {"value": 0.75, "min": 0.3, "max": 1.2},
-    "tail_curl": {"value": 25, "min": -40, "max": 90}
+    "tail_curl": {"value": 25, "min": -40, "max": 90},
+    "muscle_mass": {"value": 1.0, "min": 0.5, "max": 1.6},
+    "muscle_definition": {"value": 0.6, "min": 0.0, "max": 1.0}
   },
   "settings": {"blend": 0.035, "resolution": 900, "triangles": 60000},
   "parts": [
@@ -40,16 +42,6 @@
     },
     {
       "kind": "blob",
-      "name": "glute",
-      "mirror": true,
-      "attach": "mPelvis",
-      "at": 0,
-      "offset": [0.065, -0.05, -0.05],
-      "radii": ["0.08*$build", 0.095, "0.075*$build"],
-      "bone": false
-    },
-    {
-      "kind": "blob",
       "name": "abdomen",
       "attach": "mTorso",
       "at": 0.5,
@@ -59,16 +51,6 @@
     },
     {"kind": "blob", "name": "ribcage", "attach": "mChest", "at": 0.4, "radii": ["0.155*$build", 0.17, "0.108*$build"], "bone": false},
     {
-      "kind": "blob",
-      "name": "trapezius",
-      "mirror": true,
-      "attach": "mChest",
-      "at": 0.9,
-      "offset": [0.085, -0.01, -0.015],
-      "radii": [0.08, 0.045, 0.055],
-      "bone": false
-    },
-    {
       "kind": "chain",
       "name": "neck",
       "attach": "mChest",
@@ -77,18 +59,6 @@
       "bones": ["mNeck"],
       "radius": [0.058, 0.052],
       "limits": {"bend": [-40, 40]}
-    },
-    {
-      "kind": "chain",
-      "name": "neck_muscle",
-      "mirror": true,
-      "rigid": true,
-      "attach": "mNeck",
-      "offset": [0.042, 0.035, -0.028],
-      "points": [
-        [-0.032, -0.115, 0.05]
-      ],
-      "radius": [0.012, 0.01]
     },
     {"kind": "blob", "name": "chest_fluff", "attach": "mChest", "at": 0.6, "offset": [0, -0.01, 0.075], "radii": [0.095, 0.12, 0.05], "bone": false},
     {
@@ -323,35 +293,6 @@
     },
     {
       "kind": "blob",
-      "name": "deltoid",
-      "mirror": true,
-      "attach": "mShoulderLeft",
-      "at": 0.1,
-      "radii": ["0.055*$build", "0.05*$build", "0.052*$build"],
-      "bone": false
-    },
-    {
-      "kind": "blob",
-      "name": "biceps",
-      "mirror": true,
-      "attach": "mShoulderLeft",
-      "at": 0.5,
-      "axis": [1, 0, 0],
-      "radii": ["0.045*$build", "0.043*$build", 0.13],
-      "bone": false
-    },
-    {
-      "kind": "blob",
-      "name": "forearm",
-      "mirror": true,
-      "attach": "mElbowLeft",
-      "at": 0.3,
-      "axis": [1, 0, 0],
-      "radii": ["0.04*$build", "0.035*$build", 0.12],
-      "bone": false
-    },
-    {
-      "kind": "blob",
       "name": "palm",
       "mirror": true,
       "attach": "mWristLeft",
@@ -519,25 +460,6 @@
       "radius": ["0.082*$build", "0.056*$build", 0.036, 0.03, 0.022],
       "limits": {"bend": [-120, 40], "side": [-45, 45]}
     },
-    {
-      "kind": "blob",
-      "name": "thigh",
-      "mirror": true,
-      "attach": "mHipLeft",
-      "at": 0.45,
-      "radii": ["0.085*$build", 0.15, "0.100*$build"],
-      "bone": false
-    },
-    {
-      "kind": "blob",
-      "name": "shin",
-      "mirror": true,
-      "attach": "mKneeLeft",
-      "at": 0.4,
-      "offset": [0, 0, -0.01],
-      "radii": ["0.052*$build", 0.12, "0.058*$build"],
-      "bone": false
-    },
     {"kind": "blob", "name": "hock", "mirror": true, "attach": "mAnkleLeft", "at": 0.1, "radii": [0.032, 0.04, 0.032], "bone": false, "blend": 0.02},
     {
       "kind": "blob",
@@ -563,6 +485,222 @@
       "bones": ["mTail1", "mTail2", "mTail3", "mTail4", "mTail5", "mTail6"],
       "radius": [0.045, 0.075, 0.085, 0.07, 0.045, 0.012],
       "limits": {"bend": [-40, 40], "side": [-45, 45]}
+    },
+    {
+      "kind": "muscle",
+      "name": "glute",
+      "mirror": true,
+      "origin": {"attach": "mPelvis", "at": 0, "offset": [0.065, -0.02, -0.06]},
+      "insertion": {"attach": "mHipLeft", "at": 0.3, "offset": [0, 0, -0.035]},
+      "radius": "0.07*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "trapezius",
+      "mirror": true,
+      "origin": {"attach": "mChest", "at": 0.9, "offset": [0.035, 0, -0.04]},
+      "insertion": {"attach": "mCollarLeft", "at": 0.8, "offset": [0, 0.02, -0.02]},
+      "radius": "0.04*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "neck_muscle",
+      "mirror": true,
+      "origin": {"attach": "mChest", "at": 0.8, "offset": [0.04, 0, 0.03]},
+      "insertion": {"attach": "mNeck", "at": 0.85, "offset": [0.035, 0, -0.02]},
+      "radius": "0.017*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "pectoralis",
+      "mirror": true,
+      "origin": {"attach": "mChest", "at": 0.45, "offset": [0.045, 0, 0.075]},
+      "insertion": {"attach": "mShoulderLeft", "at": 0.08, "offset": [0, -0.025, 0.025]},
+      "radius": "0.04*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "pectoralis_fan_0",
+      "mirror": true,
+      "origin": {"attach": "mChest", "at": 0.3, "offset": [0.035, 0, 0.075]},
+      "insertion": {"attach": "mShoulderLeft", "at": 0.12, "offset": [0, -0.02, 0.02]},
+      "radius": "0.027*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "pectoralis_fan_1",
+      "mirror": true,
+      "origin": {"attach": "mChest", "at": 0.65, "offset": [0.035, 0, 0.075]},
+      "insertion": {"attach": "mShoulderLeft", "at": 0.12, "offset": [0, -0.02, 0.02]},
+      "radius": "0.027*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "latissimus",
+      "mirror": true,
+      "origin": {"attach": "mTorso", "at": 0.4, "offset": [0.075, 0, -0.07]},
+      "insertion": {"attach": "mShoulderLeft", "at": 0.1, "offset": [0, -0.03, -0.025]},
+      "radius": "0.038*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "oblique",
+      "mirror": true,
+      "origin": {"attach": "mPelvis", "at": 0.9, "offset": [0.095, 0, 0.055]},
+      "insertion": {"attach": "mChest", "at": 0.25, "offset": [0.115, 0, 0.04]},
+      "radius": "0.026*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "rectus_abdominis_0",
+      "mirror": true,
+      "origin": {"attach": "mTorso", "at": 0.0, "offset": [0.035, 0, 0.09]},
+      "insertion": {"attach": "mTorso", "at": 0.2833333333333333, "offset": [0.035, 0, 0.09]},
+      "radius": "0.029*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "rectus_abdominis_1",
+      "mirror": true,
+      "origin": {"attach": "mTorso", "at": 0.3333333333333333, "offset": [0.035, 0, 0.09]},
+      "insertion": {"attach": "mTorso", "at": 0.6166666666666667, "offset": [0.035, 0, 0.09]},
+      "radius": "0.029*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "rectus_abdominis_2",
+      "mirror": true,
+      "origin": {"attach": "mTorso", "at": 0.6666666666666666, "offset": [0.035, 0, 0.09]},
+      "insertion": {"attach": "mTorso", "at": 0.9500000000000001, "offset": [0.035, 0, 0.09]},
+      "radius": "0.029*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "deltoid",
+      "mirror": true,
+      "origin": {"attach": "mCollarLeft", "at": 0.8, "offset": [0, 0.025, 0]},
+      "insertion": {"attach": "mShoulderLeft", "at": 0.4, "offset": [0, 0.022, 0]},
+      "radius": "0.052*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "biceps",
+      "mirror": true,
+      "origin": {"attach": "mShoulderLeft", "at": 0.15, "offset": [0, 0, 0.028]},
+      "insertion": {"attach": "mElbowLeft", "at": 0.12, "offset": [0, 0, 0.018]},
+      "radius": "0.042*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "triceps",
+      "mirror": true,
+      "origin": {"attach": "mShoulderLeft", "at": 0.1, "offset": [0, 0, -0.028]},
+      "insertion": {"attach": "mElbowLeft", "at": 0.03, "offset": [0, 0, -0.018]},
+      "radius": "0.037*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "forearm",
+      "mirror": true,
+      "origin": {"attach": "mElbowLeft", "at": 0.08, "offset": [0, 0.012, 0.012]},
+      "insertion": {"attach": "mWristLeft", "at": 0.05, "offset": [0, 0, 0.008]},
+      "radius": "0.036*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "thigh",
+      "mirror": true,
+      "origin": {"attach": "mHipLeft", "at": 0.08, "offset": [0, 0, 0.035]},
+      "insertion": {"attach": "mKneeLeft", "at": 0.06, "offset": [0, 0, 0.02]},
+      "radius": "0.07*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "hamstring",
+      "mirror": true,
+      "origin": {"attach": "mHipLeft", "at": 0.12, "offset": [0, 0, -0.04]},
+      "insertion": {"attach": "mKneeLeft", "at": 0.05, "offset": [0, 0, -0.02]},
+      "radius": "0.055*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "shin",
+      "mirror": true,
+      "origin": {"attach": "mKneeLeft", "at": 0.08, "offset": [0, 0, -0.026]},
+      "insertion": {"attach": "mAnkleLeft", "at": 0.1, "offset": [0, 0, -0.012]},
+      "radius": "0.048*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_1",
+      "mirror": true,
+      "origin": {"attach": "mTail1", "at": 0.1, "offset": [0.02, 0, 0]},
+      "insertion": {"attach": "mTail1", "at": 0.9, "offset": [0.02, 0, 0]},
+      "radius": "0.025*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_2",
+      "mirror": true,
+      "origin": {"attach": "mTail2", "at": 0.1, "offset": [0.02, 0, 0]},
+      "insertion": {"attach": "mTail2", "at": 0.9, "offset": [0.02, 0, 0]},
+      "radius": "0.0125*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
+    },
+    {
+      "kind": "muscle",
+      "name": "tail_muscle_3",
+      "mirror": true,
+      "origin": {"attach": "mTail3", "at": 0.1, "offset": [0.02, 0, 0]},
+      "insertion": {"attach": "mTail3", "at": 0.9, "offset": [0.02, 0, 0]},
+      "radius": "0.008333333333333333*$build*$muscle_mass",
+      "tendon": 0.2,
+      "blend": "0.024*(1-0.75*$muscle_definition)"
     }
-  ]
+  ],
+  "poses": {
+    "muscle_flex": {
+      "mElbowLeft": {"bend": 70},
+      "mKneeLeft": {"bend": -35}
+    }
+  }
 }
